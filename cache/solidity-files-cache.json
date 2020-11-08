@@ -1,0 +1,965 @@
+{
+  "_format": "hh-sol-cache-1",
+  "files": {
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\interfaces\\IUniswapConnector03.sol": {
+      "lastModificationDate": 1604856142559,
+      "sourceName": "contracts/interfaces/IUniswapConnector03.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol",
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol",
+        "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol",
+        "@primitivefi/contracts/contracts/option/interfaces/IOption.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "IUniswapConnector03"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@uniswap\\v2-periphery\\contracts\\interfaces\\IUniswapV2Router02.sol": {
+      "lastModificationDate": 1594353505741,
+      "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "./IUniswapV2Router01.sol"
+      ],
+      "versionPragmas": [
+        ">=0.6.2"
+      ],
+      "artifacts": [
+        "IUniswapV2Router02"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Factory.sol": {
+      "lastModificationDate": 1593303259440,
+      "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "IUniswapV2Factory"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@primitivefi\\contracts\\contracts\\option\\interfaces\\ITrader.sol": {
+      "lastModificationDate": 1604246178878,
+      "sourceName": "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "./IOption.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "ITrader"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@primitivefi\\contracts\\contracts\\option\\interfaces\\IOption.sol": {
+      "lastModificationDate": 1604246178871,
+      "sourceName": "@primitivefi/contracts/contracts/option/interfaces/IOption.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/ERC20.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "IOption"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@uniswap\\v2-periphery\\contracts\\interfaces\\IUniswapV2Router01.sol": {
+      "lastModificationDate": 1594353505740,
+      "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.6.2"
+      ],
+      "artifacts": [
+        "IUniswapV2Router01"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\ERC20.sol": {
+      "lastModificationDate": 1604854798559,
+      "sourceName": "@openzeppelin/contracts/token/ERC20/ERC20.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "../../GSN/Context.sol",
+        "./IERC20.sol",
+        "../../math/SafeMath.sol",
+        "../../utils/Address.sol"
+      ],
+      "versionPragmas": [
+        "^0.6.0"
+      ],
+      "artifacts": [
+        "ERC20"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\GSN\\Context.sol": {
+      "lastModificationDate": 1604854798546,
+      "sourceName": "@openzeppelin/contracts/GSN/Context.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.6.0"
+      ],
+      "artifacts": [
+        "Context"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\IERC20.sol": {
+      "lastModificationDate": 1604854798579,
+      "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.6.0"
+      ],
+      "artifacts": [
+        "IERC20"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\math\\SafeMath.sol": {
+      "lastModificationDate": 1604854798601,
+      "sourceName": "@openzeppelin/contracts/math/SafeMath.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.6.0"
+      ],
+      "artifacts": [
+        "SafeMath"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\utils\\Address.sol": {
+      "lastModificationDate": 1604854798543,
+      "sourceName": "@openzeppelin/contracts/utils/Address.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.6.2"
+      ],
+      "artifacts": [
+        "Address"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\UniswapConnector03.sol": {
+      "lastModificationDate": 1604856170783,
+      "sourceName": "contracts/UniswapConnector03.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol",
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol",
+        "./interfaces/IUniswapConnector03.sol",
+        "./libraries/UniswapConnectorLib03.sol",
+        "@openzeppelin/contracts/math/SafeMath.sol",
+        "@openzeppelin/contracts/token/ERC20/SafeERC20.sol",
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "UniswapConnector03"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Callee.sol": {
+      "lastModificationDate": 1593303259438,
+      "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "IUniswapV2Callee"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Pair.sol": {
+      "lastModificationDate": 1593303259441,
+      "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "IUniswapV2Pair"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\libraries\\UniswapConnectorLib03.sol": {
+      "lastModificationDate": 1604856133803,
+      "sourceName": "contracts/libraries/UniswapConnectorLib03.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol",
+        "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol",
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol",
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol",
+        "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol",
+        "@primitivefi/contracts/contracts/option/libraries/TraderLib.sol",
+        "../interfaces/IWethConnector01.sol",
+        "./WethConnectorLib01.sol",
+        "@openzeppelin/contracts/math/SafeMath.sol",
+        "@openzeppelin/contracts/token/ERC20/SafeERC20.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "UniswapConnectorLib03"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\SafeERC20.sol": {
+      "lastModificationDate": 1604854798600,
+      "sourceName": "@openzeppelin/contracts/token/ERC20/SafeERC20.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "./IERC20.sol",
+        "../../math/SafeMath.sol",
+        "../../utils/Address.sol"
+      ],
+      "versionPragmas": [
+        "^0.6.0"
+      ],
+      "artifacts": [
+        "SafeERC20"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
+      "lastModificationDate": 1604854798596,
+      "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.6.0"
+      ],
+      "artifacts": [
+        "ReentrancyGuard"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\node_modules\\@primitivefi\\contracts\\contracts\\option\\libraries\\TraderLib.sol": {
+      "lastModificationDate": 1604246178883,
+      "sourceName": "@primitivefi/contracts/contracts/option/libraries/TraderLib.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/IOption.sol",
+        "@openzeppelin/contracts/math/SafeMath.sol",
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/SafeERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.6.2"
+      ],
+      "artifacts": [
+        "TraderLib"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\interfaces\\IWethConnector01.sol": {
+      "lastModificationDate": 1604856161159,
+      "sourceName": "contracts/interfaces/IWethConnector01.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "@primitivefi/contracts/contracts/option/interfaces/IOption.sol",
+        "./IWETH.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "IWethConnector01"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\libraries\\WethConnectorLib01.sol": {
+      "lastModificationDate": 1604856194841,
+      "sourceName": "contracts/libraries/WethConnectorLib01.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/IWETH.sol",
+        "@primitivefi/contracts/contracts/option/interfaces/IOption.sol",
+        "@openzeppelin/contracts/math/SafeMath.sol",
+        "@openzeppelin/contracts/token/ERC20/SafeERC20.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "WethConnectorLib01"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\interfaces\\IWETH.sol": {
+      "lastModificationDate": 1604620634810,
+      "sourceName": "contracts/interfaces/IWETH.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "IWETH"
+      ]
+    },
+    "C:\\Users\\alexa\\OneDrive\\Documents\\Master\\Blockchain\\primitive-v1-connectors\\contracts\\WethConnector01.sol": {
+      "lastModificationDate": 1604620753818,
+      "sourceName": "contracts/WethConnector01.sol",
+      "solcConfig": {
+        "version": "0.6.2",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "devdoc",
+                "userdoc",
+                "storageLayout",
+                "evm.gasEstimates"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          },
+          "metadata": {
+            "useLiteralContent": true
+          }
+        }
+      },
+      "imports": [
+        "./interfaces/IWethConnector01.sol",
+        "./libraries/WethConnectorLib01.sol",
+        "@openzeppelin/contracts/math/SafeMath.sol",
+        "@openzeppelin/contracts/token/ERC20/SafeERC20.sol",
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
+      ],
+      "versionPragmas": [
+        "0.6.2"
+      ],
+      "artifacts": [
+        "WethConnector01"
+      ]
+    }
+  }
+}
