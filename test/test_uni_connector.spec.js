@@ -256,6 +256,36 @@ describe('UniswapConnector', () => {
     await batchApproval([uniswapConnector.address], [pair], [Admin, User])
   })
 
+  describe('public variables', () => {
+    it('router()', async () => {
+      assert.equal(await uniswapConnector.router(), uniswapRouter.address)
+    })
+    it('factory()', async () => {
+      assert.equal(await uniswapConnector.factory(), uniswapFactory.address)
+    })
+    it('trader()', async () => {
+      assert.equal(await uniswapConnector.trader(), trader.address)
+    })
+    it('getName()', async () => {
+      assert.equal(await uniswapConnector.getName(), 'PrimitiveV1UniswapConnector03')
+    })
+    it('getVersion()', async () => {
+      assert.equal(await uniswapConnector.getVersion(), 3)
+    })
+  })
+
+  describe('deployUniswapMarket', () => {
+    it('deployUniswapMarket()', async () => {
+      await uniswapConnector.deployUniswapMarket(optionToken.address, weth.address)
+    })
+  })
+
+  describe('uniswapV2Call', () => {
+    it('uniswapV2Call()', async () => {
+      await expect(uniswapConnector.uniswapV2Call(Alice, '0', '0', ['1'])).to.be.reverted
+    })
+  })
+
   describe('mintShortOptionsThenSwapToTokens()', () => {
     it('should mint Primitive V1 Options then swap shortTokens on Uniswap V2', async () => {
       // Get the pair address.
@@ -303,6 +333,48 @@ describe('UniswapConnector', () => {
         `quoteDelta ${formatEther(quoteChange)} != amountOutMin ${formatEther(amountOutMin)}`
       )
       assertBNEqual(await optionToken.balanceOf(uniswapConnector.address), '0')
+    })
+
+    it('should revert if quantity is zero', async () => {
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('0')
+      let path = [redeemToken.address, quoteToken.address] // path[0] MUST be the optionToken address.
+      let amountOutMin = parseEther('0')
+      let to = Alice
+      let deadline = Math.floor(Date.now() / 1000) + 60 * 20
+
+      // Call the function
+      await expect(
+        uniswapConnector.mintShortOptionsThenSwapToTokens(
+          optionTokenAddress,
+          optionsToMint,
+          amountOutMin,
+          path,
+          to,
+          deadline
+        )
+      ).to.be.revertedWith('ERR_ZERO')
+    })
+
+    it('should revert if we are not swapping from the redeem token', async () => {
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('0.1')
+      let path = [optionToken.address, quoteToken.address] // path[0] MUST be the optionToken address.
+      let amountOutMin = '1'
+      let to = Alice
+      let deadline = Math.floor(Date.now() / 1000) + 60 * 20
+
+      // Call the function
+      await expect(
+        uniswapConnector.mintShortOptionsThenSwapToTokens(
+          optionTokenAddress,
+          optionsToMint,
+          amountOutMin,
+          path,
+          to,
+          deadline
+        )
+      ).to.be.revertedWith('ERR_PATH_OPTION_START')
     })
   })
 
@@ -628,6 +700,26 @@ describe('UniswapConnector', () => {
         uniswapConnector,
         'FlashClosed'
       )
+    })
+
+    it('should revert with premium over max', async () => {
+      // Get the pair instance to approve it to the uniswapConnector
+      let amountRedeems = parseEther('0.1')
+      await expect(uniswapConnector.closeFlashLong(optionToken.address, amountRedeems, amountRedeems)).to.be.revertedWith(
+        'ERR_UNISWAPV2_CALL_FAIL'
+      )
+    })
+
+    it('should revert flash loan quantity is zero', async () => {
+      // Get the pair instance to approve it to the uniswapConnector
+      let amountOptions = parseEther('0')
+      let path = [redeemToken.address, underlyingToken.address]
+      let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
+
+      await expect(
+        uniswapConnector.openFlashLong(optionToken.address, amountOptions, amountOutMin.add(1))
+      ).to.be.revertedWith('INSUFFICIENT_OUTPUT_AMOUNT')
     })
   })
 
