@@ -9,6 +9,7 @@ require('dotenv').config()
 require('@nomiclabs/hardhat-etherscan')
 require('@nomiclabs/hardhat-waffle')
 require('hardhat-deploy')
+require('solidity-coverage')
 
 // == Environment ==
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20).toString('base64')
@@ -20,6 +21,10 @@ const live = process.env.MNEMONIC || mnemonic
 // == hardhat Config ==
 Object.assign(module.exports, {
   networks: {
+    coverage: {
+      url: 'http://localhost:8555',
+      gas: 10000000,
+    },
     local: {
       url: 'http://127.0.0.1:8545',
       gasPrice: 80000000000,
