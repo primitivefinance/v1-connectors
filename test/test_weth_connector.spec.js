@@ -145,9 +145,7 @@ describe('WethConnector', () => {
     it('should successfully call safe mint a few times in a row', async () => {
       // Make sure we can mint different values, multiple times in a row.
       await safeMintWithETH(parseEther('0.1'))
-      await safeMintWithETH(parseEther('0.5'))
       await safeMintWithETH(parseEther('0.22'))
-      await safeMintWithETH(parseEther('0.5123542351'))
       await safeMintWithETH(parseEther('0.23526231124324'))
       await safeMintWithETH(parseEther('0.234345'))
     })
@@ -156,7 +154,7 @@ describe('WethConnector', () => {
   describe('safeExerciseForETH', () => {
     beforeEach(async () => {
       // Mint some options to the Alice address so the proceeding test can exercise them.
-      await safeMintWithETH(parseEther('10'))
+      await safeMintWithETH(parseEther('5'))
     })
 
     safeExerciseForETH = async (inputUnderlyings) => {
@@ -290,10 +288,10 @@ describe('WethConnector', () => {
     })
 
     it('should close consecutively', async () => {
-      await safeMintWithETH(TEN_ETHER)
+      await safeMintWithETH(parseEther('1'))
       await safeCloseForETH(parseEther('0.1'))
-      await safeCloseForETH(FIVE_ETHER)
-      await safeCloseForETH(parseEther('2.5433451'))
+      await safeCloseForETH(parseEther('0.25'))
+      await safeCloseForETH(parseEther('0.5433451'))
     })
   })
 
@@ -311,16 +309,15 @@ describe('WethConnector', () => {
     it('should handle multiple transactions', async () => {
       // Start with 1000 options
       //await underlyingToken.deposit({ value: THOUSAND_ETHER })
-      await safeMintWithETH(parseEther('10'))
+      await safeMintWithETH(parseEther('1'))
 
       await safeCloseForETH(parseEther('0.1'))
-      await safeExerciseForETH(parseEther('20'))
       await safeCloseForETH(parseEther('0.1'))
       await safeExerciseForETH(parseEther('0.1'))
       await safeExerciseForETH(parseEther('0.1'))
       await safeExerciseForETH(parseEther('0.1'))
       await safeExerciseForETH(parseEther('0.1'))
-      await safeCloseForETH(FIVE_ETHER)
+      await safeCloseForETH(parseEther('0.2'))
       await safeCloseForETH(await optionToken.balanceOf(Alice))
 
       // Assert option and redeem token balances are 0
@@ -354,7 +351,7 @@ describe('WethConnector', () => {
       await redeemToken.connect(User).approve(trader.address, MILLION_ETHER)
 
       // Setup initial state and make the option expired
-      let inputUnderlyings = parseEther('10')
+      let inputUnderlyings = parseEther('0.5')
 
       // Mint underlying tokens so we can use them to mint options
       await underlyingToken.deposit({ value: inputUnderlyings })
@@ -412,9 +409,8 @@ describe('WethConnector', () => {
     })
 
     it('should unwind consecutively', async () => {
-      await safeUnwindForETH(parseEther('0.4351'))
+      await safeUnwindForETH(parseEther('0.2351'))
       await safeUnwindForETH(parseEther('0.1'))
-      await safeUnwindForETH(parseEther('2.5433'))
     })
   })
 
@@ -437,7 +433,7 @@ describe('WethConnector', () => {
 
       // Mint some option and redeem tokens to use in the tests.
       await dai.transfer(optionToken.address, parseEther('2000'))
-      await weth.deposit({ value: parseEther('10') })
+      await weth.deposit({ value: parseEther('1.5') })
       await optionToken.mintOptions(Alice)
 
       // Trader contract instance

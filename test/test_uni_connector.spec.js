@@ -131,7 +131,6 @@ describe('UniswapConnector', () => {
 
   before(async () => {
     let signers = await setup.newWallets()
-    console.log('got wallets')
 
     // Signers
     Admin = signers[0]
@@ -577,11 +576,6 @@ describe('UniswapConnector', () => {
       let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
       let optionBalanceBefore = await optionToken.balanceOf(Alice)
 
-      console.log(`Weth balance: ${formatEther(underlyingBalanceBefore)}`)
-      console.log(`Dai balance: ${formatEther(quoteBalanceBefore)}`)
-      console.log(`Redeem balance: ${formatEther(redeemBalanceBefore)}`)
-      console.log(`Option balance: ${formatEther(optionBalanceBefore)}`)
-
       // Get the pair instance to approve it to the uniswapConnector
       let amountOptions = parseEther('0.1')
       let path = [redeemToken.address, underlyingToken.address]
@@ -613,11 +607,6 @@ describe('UniswapConnector', () => {
       assertBNEqual(optionChange.toString(), amountOptions)
       assertBNEqual(quoteChange.toString(), '0')
       assertBNEqual(redeemChange.toString(), '0')
-
-      console.log(`Weth balance: ${formatEther(underlyingBalanceAfter)}`)
-      console.log(`Dai balance: ${formatEther(quoteBalanceAfter)}`)
-      console.log(`Redeem balance: ${formatEther(redeemBalanceAfter)}`)
-      console.log(`Option balance: ${formatEther(optionBalanceAfter)}`)
     })
 
     it('should revert on swapping an amount lower than amountOutMin', async () => {
@@ -752,7 +741,7 @@ describe('UniswapConnector', () => {
       let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
       let optionBalanceBefore = await optionToken.balanceOf(Alice)
 
-      let amountRedeems = parseEther('0.1')
+      let amountRedeems = parseEther('0.01')
       await expect(uniswapConnector.closeFlashLong(optionToken.address, amountRedeems, '0')).to.emit(
         uniswapConnector,
         'FlashClosed'
@@ -875,7 +864,7 @@ describe('UniswapConnector', () => {
 
     it('returns a loanRemainder amount of 0 in the event FlashOpened because negative premium', async () => {
       // Get the pair instance to approve it to the uniswapConnector
-      let amountOptions = parseEther('0.1')
+      let amountOptions = parseEther('0.01')
       let path = [redeemToken.address, underlyingToken.address]
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
       let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])

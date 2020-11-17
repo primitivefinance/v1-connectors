@@ -7,7 +7,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "yarn test",
+    "test": "cross-env hardhat test",
     "coverage": "cross-env hardhat coverage --network coverage",
     "task:clean": "hardhat clean",
     "task:compile": "hardhat compile",
