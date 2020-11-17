@@ -9,6 +9,7 @@
   "scripts": {
     "test": "cross-env hardhat test",
     "coverage": "cross-env hardhat coverage --network coverage",
+    "coverage:uni": "cross-env hardhat coverage --network coverage --testfiles 'test/test_uni_connector.spec.js'",
     "task:clean": "hardhat clean",
     "task:compile": "hardhat compile",
     "compile": "npm-run-all task:clean task:compile",
