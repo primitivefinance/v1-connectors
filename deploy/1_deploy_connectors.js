@@ -1,4 +1,4 @@
-const bre = require('@nomiclabs/buidler')
+const bre = require('hardhat')
 
 const TRADER = {
   1: require('@primitivefi/contracts/deployments/live_1/Trader.json'),

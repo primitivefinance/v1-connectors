@@ -6,7 +6,7 @@ const verifyUniswapConnector = async () => {
   try {
     await run('verify', {
       address: UniswapConnector.address,
-      contractName: 'contracts/connectors/Uniswap/UniswapConnector03.sol:UniswapConnector03',
+      contractName: 'contracts/UniswapConnector03.sol:UniswapConnector03',
       constructorArguments: UniswapConnector.args,
     })
   } catch (err) {
@@ -26,7 +26,3 @@ main()
     console.error(error)
     process.exit(1)
   })
-
-Object.assign(module.exports, {
-  checkTemplates,
-})
