@@ -1,6 +1,6 @@
 {
   "name": "@primitivefi/v1-connectors",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Smart contracts designed to bridge Primitive to other protocols.",
   "engines": {
     "node": ">=10"
