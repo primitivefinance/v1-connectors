@@ -681,16 +681,16 @@ describe('UniswapConnector', () => {
       assertBNEqual(redeemChange.toString(), '0')
     })
 
-    it('should revert on swapping an amount lower than amountOutMin', async () => {
+    it('should revert if actual premium is above max premium', async () => {
       // Get the pair instance to approve it to the uniswapConnector
       let amountOptions = parseEther('0.1')
       let path = [redeemToken.address, underlyingToken.address]
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
-      let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
+      let maxPremium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
 
-      await expect(
-        uniswapConnector.openFlashLong(optionToken.address, amountOptions, amountOutMin.add(1))
-      ).to.be.revertedWith('ERR_UNISWAPV2_CALL_FAIL')
+      await expect(uniswapConnector.openFlashLong(optionToken.address, amountOptions, maxPremium.sub(1))).to.be.revertedWith(
+        'ERR_UNISWAPV2_CALL_FAIL'
+      )
     })
 
     it('should do a normal flash close', async () => {
