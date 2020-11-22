@@ -370,7 +370,7 @@ library UniswapConnectorLib03 {
     // ==== Liquidity Functions ====
 
     ///
-    /// @dev Adds redeemToken liquidity to a redeem<>otherToken pair by minting shortOptionTokens with underlyingTokens.
+    /// @dev Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
     /// @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
     /// underlyingToken -> redeemToken -> UNI-V2.
     /// @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
@@ -470,86 +470,6 @@ library UniswapConnectorLib03 {
         return (amountA, amountB, liquidity);
     }
 
-    ///
-    /// @dev Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
-    /// @notice Pulls UNI-V2 liquidity shares with shortOption<>quote token, and optionTokens from msg.sender.
-    /// Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
-    /// Sends quoteTokens from the burned UNI-V2 liquidity shares to the "to" address.
-    /// UNI-V2 -> optionToken -> underlyingToken.
-    /// @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
-    /// @param otherTokenAddress The address of the other token in the option pair.
-    /// @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
-    /// @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
-    /// @param amountBMin The minimum quantity of quoteTokens to receive from removing liquidity.
-    /// @param to The address that receives quoteTokens from burned UNI-V2, and underlyingTokens from closed options.
-    /// @param deadline The timestamp to expire a pending transaction.
-    ///
-    function removeShortLiquidityThenCloseOptions(
-        IUniswapV2Factory factory,
-        IUniswapV2Router02 router,
-        ITrader trader,
-        address optionAddress,
-        address otherTokenAddress,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) internal returns (uint256, uint256) {
-        // Store in memory for gas savings.
-        address redeemToken = IOption(optionAddress).redeemToken();
-
-        {
-            // Gets the Uniswap V2 Pair address for shortOptionToken and otherTokens.
-            // Transfers the LP tokens for the pair to this contract.
-            // Warning: internal call to a non-trusted address `msg.sender`.
-            address pair = factory.getPair(redeemToken, otherTokenAddress);
-            IERC20(pair).safeTransferFrom(msg.sender, address(this), liquidity);
-            IERC20(pair).approve(address(router), uint256(-1));
-        }
-
-        // Remove liquidity from Uniswap V2 pool to receive pool tokens (shortOptionTokens + otherTokens).
-        (uint256 amountShortOptions, uint256 amountOtherTokens) = router
-            .removeLiquidity(
-            redeemToken,
-            otherTokenAddress,
-            liquidity,
-            amountAMin,
-            amountBMin,
-            address(this),
-            deadline
-        );
-
-        // Approves trader to pull longOptionTokens and shortOptionTOkens from this contract to close options.
-        {
-            IOption optionToken = IOption(optionAddress);
-            IERC20(address(optionToken)).approve(address(trader), uint256(-1));
-            IERC20(redeemToken).approve(address(trader), uint256(-1));
-
-            // Calculate equivalent quantity of redeem (short option) tokens to close the option position.
-            // Need to cancel base units and have quote units remaining.
-            uint256 requiredLongOptionTokens = amountShortOptions
-                .mul(optionToken.getBaseValue())
-                .mul(1 ether)
-                .div(optionToken.getQuoteValue())
-                .div(1 ether);
-
-            // Pull the required longOptionTokens from msg.sender to this contract.
-            IERC20(address(optionToken)).safeTransferFrom(
-                msg.sender,
-                address(this),
-                requiredLongOptionTokens
-            );
-            // Pushes option and redeem tokens to the option contract and calls "closeOption".
-            // Receives underlyingTokens and sends them to the "to" address.
-            trader.safeClose(optionToken, requiredLongOptionTokens, to);
-        }
-
-        // Send the otherTokens received from burning liquidity shares to the "to" address.
-        IERC20(otherTokenAddress).safeTransfer(to, amountOtherTokens);
-        return (amountShortOptions, amountOtherTokens);
-    }
-
     // ==== Internal Functions ====
 
     ///
@@ -585,5 +505,64 @@ library UniswapConnectorLib03 {
             deadline
         );
         success = true;
+    }
+
+    /// @dev Removes liquidity from a uniswap pair, using this contract's balance of LP tokens.
+    ///      Withdrawn tokens are sent to this contract.
+    function _removeLiquidity(
+        IUniswapV2Router02 router,
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        uint deadline
+    ) internal returns (uint, uint) {
+        // Gets the Uniswap V2 Pair address for shortOptionToken and UnderlyingTokens.
+        // Transfers the LP tokens for the pair to this contract.
+        // Warning: internal call to a non-trusted address `msg.sender`.
+        address pair = IUniswapV2Factory(router.factory()).getPair(tokenA, tokenB);
+        IERC20(pair).safeTransferFrom(msg.sender, address(this), liquidity);
+        IERC20(pair).approve(address(router), uint256(-1));
+        
+        // Remove liquidity from Uniswap V2 pool to receive pool tokens (shortOptionTokens + UnderlyingTokens).
+        (uint256 amountShortOptions, uint256 amountUnderlyingTokens) = router
+            .removeLiquidity(
+            tokenA,
+            tokenB,
+            liquidity,
+            amountAMin,
+            amountBMin,
+            address(this),
+            deadline
+        );
+        return (amountShortOptions, amountUnderlyingTokens);
+    }
+
+    /// @dev Closes option tokens by pulling option tokens from user, and using this contract's balance of redeem tokens.
+    function _closeOptionsWithShortTokens(
+        ITrader trader,
+        IOption optionToken,
+        uint amountShortOptions,
+        address receiver
+    ) internal returns (uint, uint, uint) {
+        // Approves trader to pull longOptionTokens and shortOptionTOkens from this contract to close options.
+        IERC20(address(optionToken)).approve(address(trader), uint256(-1));
+        IERC20(optionToken.redeemToken()).approve(address(trader), uint256(-1));
+        // Calculate equivalent quantity of redeem (short option) tokens to close the long option position.
+        // longOptions = shortOptions / strikeRatio
+        uint256 requiredLongOptionTokens = amountShortOptions
+            .mul(optionToken.getBaseValue())
+            .div(optionToken.getQuoteValue());
+            
+        // Pull the required longOptionTokens from msg.sender to this contract.
+        IERC20(address(optionToken)).safeTransferFrom(
+            msg.sender,
+            address(this),
+            requiredLongOptionTokens
+        );
+        // Pushes option and redeem tokens to the option contract and calls "closeOption".
+        // Receives underlyingTokens and sends them to the "receiver" address.
+        return trader.safeClose(optionToken, requiredLongOptionTokens, receiver);
     }
 }

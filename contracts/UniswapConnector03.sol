@@ -22,10 +22,10 @@ import {
     ITrader,
     IERC20
 } from "./interfaces/IUniswapConnector03.sol";
-import { UniswapConnectorLib03 } from "./libraries/UniswapConnectorLib03.sol";
+import {UniswapConnectorLib03} from "./libraries/UniswapConnectorLib03.sol";
 // Open Zeppelin
-import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
     ReentrancyGuard
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -85,15 +85,16 @@ contract UniswapConnector03 is
         address to,
         uint256 deadline
     ) external override nonReentrant returns (bool) {
-        bool success = UniswapConnectorLib03.mintShortOptionsThenSwapToTokens(
-            router,
-            optionToken,
-            amountIn,
-            amountOutMin,
-            path,
-            to,
-            deadline
-        );
+        bool success =
+            UniswapConnectorLib03.mintShortOptionsThenSwapToTokens(
+                router,
+                optionToken,
+                amountIn,
+                amountOutMin,
+                path,
+                to,
+                deadline
+            );
         return success;
     }
 
@@ -121,16 +122,16 @@ contract UniswapConnector03 is
         address[] memory path,
         address to
     ) public override returns (uint256, uint256) {
-        (uint256 outputOptions, uint256 loanRemainder) = UniswapConnectorLib03
-            .flashMintShortOptionsThenSwap(
-            router,
-            pairAddress,
-            optionAddress,
-            flashLoanQuantity,
-            maxPremium,
-            path,
-            to
-        );
+        (uint256 outputOptions, uint256 loanRemainder) =
+            UniswapConnectorLib03.flashMintShortOptionsThenSwap(
+                router,
+                pairAddress,
+                optionAddress,
+                flashLoanQuantity,
+                maxPremium,
+                path,
+                to
+            );
         emit FlashOpened(msg.sender, outputOptions, loanRemainder);
         return (outputOptions, loanRemainder);
     }
@@ -151,18 +152,16 @@ contract UniswapConnector03 is
         address[] memory path,
         address to
     ) public override returns (uint256, uint256) {
-        (
-            uint256 outputUnderlyings,
-            uint256 underlyingPayout
-        ) = UniswapConnectorLib03.flashCloseLongOptionsThenSwap(
-            router,
-            pairAddress,
-            optionAddress,
-            flashLoanQuantity,
-            minPayout,
-            path,
-            to
-        );
+        (uint256 outputUnderlyings, uint256 underlyingPayout) =
+            UniswapConnectorLib03.flashCloseLongOptionsThenSwap(
+                router,
+                pairAddress,
+                optionAddress,
+                flashLoanQuantity,
+                minPayout,
+                path,
+                to
+            );
         emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
         return (outputUnderlyings, underlyingPayout);
     }
@@ -192,31 +191,31 @@ contract UniswapConnector03 is
         path[1] = underlyingToken;
         IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
 
-        bytes4 selector = bytes4(
-            keccak256(
-                bytes(
-                    "flashMintShortOptionsThenSwap(address,address,uint256,uint256,address[],address)"
+        bytes4 selector =
+            bytes4(
+                keccak256(
+                    bytes(
+                        "flashMintShortOptionsThenSwap(address,address,uint256,uint256,address[],address)"
+                    )
                 )
-            )
-        );
-        bytes memory params = abi.encodeWithSelector(
-            selector, // function to call in this contract
-            pairAddress, // pair contract we are borrowing from
-            optionToken, // option token to mint with flash loaned tokens
-            amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
-            maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
-            path, // redeemToken -> underlyingToken
-            msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
-        );
+            );
+        bytes memory params =
+            abi.encodeWithSelector(
+                selector, // function to call in this contract
+                pairAddress, // pair contract we are borrowing from
+                optionToken, // option token to mint with flash loaned tokens
+                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
+                maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
+                path, // redeemToken -> underlyingToken
+                msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
+            );
 
         // Receives 0 quoteTokens and `amountOptions` of underlyingTokens to `this` contract address.
         // Then executes `flashMintShortOptionsThenSwap`.
-        uint256 amount0Out = pair.token0() == underlyingToken
-            ? amountOptions
-            : 0;
-        uint256 amount1Out = pair.token0() == underlyingToken
-            ? 0
-            : amountOptions;
+        uint256 amount0Out =
+            pair.token0() == underlyingToken ? amountOptions : 0;
+        uint256 amount1Out =
+            pair.token0() == underlyingToken ? 0 : amountOptions;
 
         // Borrow the amountOptions quantity of underlyingTokens and execute the callback function using params.
         pair.swap(amount0Out, amount1Out, address(this), params);
@@ -249,22 +248,24 @@ contract UniswapConnector03 is
         path[1] = redeemToken;
         IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
 
-        bytes4 selector = bytes4(
-            keccak256(
-                bytes(
-                    "flashCloseLongOptionsThenSwap(address,address,uint256,uint256,address[],address)"
+        bytes4 selector =
+            bytes4(
+                keccak256(
+                    bytes(
+                        "flashCloseLongOptionsThenSwap(address,address,uint256,uint256,address[],address)"
+                    )
                 )
-            )
-        );
-        bytes memory params = abi.encodeWithSelector(
-            selector, // function to call in this contract
-            pairAddress, // pair contract we are borrowing from
-            optionToken, // option token to close with flash loaned redeemTokens
-            amountRedeems, // quantity of redeemTokens from flash loan to use to close options
-            minPayout, // total remaining underlyingTokens after flash loan is paid
-            path, // underlyingToken -> redeemToken
-            msg.sender // address to send payout of underlyingTokens to. Will pull underlyingTokens if negative payout and minPayout <= 0.
-        );
+            );
+        bytes memory params =
+            abi.encodeWithSelector(
+                selector, // function to call in this contract
+                pairAddress, // pair contract we are borrowing from
+                optionToken, // option token to close with flash loaned redeemTokens
+                amountRedeems, // quantity of redeemTokens from flash loan to use to close options
+                minPayout, // total remaining underlyingTokens after flash loan is paid
+                path, // underlyingToken -> redeemToken
+                msg.sender // address to send payout of underlyingTokens to. Will pull underlyingTokens if negative payout and minPayout <= 0.
+            );
 
         // Receives 0 underlyingTokens and `amountRedeems` of redeemTokens to `this` contract address.
         // Then executes `flashCloseLongOptionsThenSwap`.
@@ -325,7 +326,6 @@ contract UniswapConnector03 is
     /// Sends quoteTokens from the burned UNI-V2 liquidity shares to the "to" address.
     /// UNI-V2 -> optionToken -> underlyingToken.
     /// @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
-    /// @param otherTokenAddress The address of the other token in the option pair.
     /// @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
     /// @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
     /// @param amountBMin The minimum quantity of quoteTokens to receive from removing liquidity.
@@ -334,26 +334,59 @@ contract UniswapConnector03 is
     ///
     function removeShortLiquidityThenCloseOptions(
         address optionAddress,
-        address otherTokenAddress,
         uint256 liquidity,
         uint256 amountAMin,
         uint256 amountBMin,
         address to,
         uint256 deadline
     ) external override nonReentrant returns (uint256, uint256) {
-        return
-            UniswapConnectorLib03.removeShortLiquidityThenCloseOptions(
-                factory,
+        address redeemToken = IOption(optionAddress).redeemToken();
+        address underlyingTokenAddress =
+            IOption(optionAddress).getUnderlyingTokenAddress();
+
+        // Check the short option tokens before and after, there could be dust.
+        uint256 redeemBalance = IERC20(redeemToken).balanceOf(address(this));
+
+        // Remove liquidity by burning lp tokens from msg.sender, withdraw tokens to this contract.
+        (uint256 shortTokensWithdrawn, uint256 underlyingTokensWithdrawn) =
+            UniswapConnectorLib03._removeLiquidity(
                 router,
-                trader,
-                optionAddress,
-                otherTokenAddress,
+                redeemToken,
+                underlyingTokenAddress,
                 liquidity,
                 amountAMin,
                 amountBMin,
-                to,
                 deadline
             );
+
+        // Send option and redeem tokens to the option contract from this contract, burn them, then receive underlying tokens.
+        (, , uint256 underlyingTokensFromClosedOptions) =
+            UniswapConnectorLib03._closeOptionsWithShortTokens(
+                trader,
+                IOption(optionAddress),
+                shortTokensWithdrawn,
+                to
+            );
+
+        // After the options were closed, calculate the dust by checking after balance against the before balance.
+        redeemBalance = IERC20(redeemToken).balanceOf(address(this)).sub(
+            redeemBalance
+        );
+
+        // If there is dust, send it out
+        if (redeemBalance > 0) {
+            IERC20(redeemToken).safeTransfer(to, redeemBalance);
+        }
+
+        // Send the UnderlyingTokens received from burning liquidity shares to the "to" address.
+        IERC20(underlyingTokenAddress).safeTransfer(
+            to,
+            underlyingTokensWithdrawn
+        );
+        return (
+            underlyingTokensWithdrawn.add(underlyingTokensFromClosedOptions),
+            redeemBalance
+        );
     }
 
     // ==== Callback Implementation ====
@@ -399,8 +432,8 @@ contract UniswapConnector03 is
     /// @dev Gets a UniswapV2Pair address for two tokens by calling the UniswapV2Factory.
     function getUniswapMarketForTokens(address token0, address token1)
         public
-        override
         view
+        override
         returns (address)
     {
         address uniswapPair = factory.getPair(token0, token1);
@@ -409,12 +442,12 @@ contract UniswapConnector03 is
     }
 
     /// @dev Gets the name of the contract.
-    function getName() external override pure returns (string memory) {
+    function getName() external pure override returns (string memory) {
         return "PrimitiveV1UniswapConnector03";
     }
 
     /// @dev Gets the version of the contract.
-    function getVersion() external override pure returns (uint8) {
+    function getVersion() external pure override returns (uint8) {
         return uint8(3);
     }
 }
