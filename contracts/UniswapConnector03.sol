@@ -65,10 +65,10 @@ contract UniswapConnector03 is
     // ==== Combo Operations ====
 
     ///
-    /// @dev Mints long + short option tokens, then swaps the shortOptionTokens (redeem) for tokens.
+    /// @dev    Mints long + short option tokens, then swaps the shortOptionTokens (redeem) for tokens.
     /// @notice If the first address in the path is not the shortOptionToken address, the tx will fail.
-    /// underlyingToken -> shortOptionToken -> quoteToken.
-    /// IMPORTANT: redeemTokens = shortOptionTokens
+    ///         underlyingToken -> shortOptionToken -> quoteToken.
+    ///         IMPORTANT: redeemTokens = shortOptionTokens
     /// @param optionToken The address of the Option contract.
     /// @param amountIn The quantity of options to mint.
     /// @param amountOutMin The minimum quantity of tokens to receive in exchange for the shortOptionTokens.
@@ -101,11 +101,11 @@ contract UniswapConnector03 is
     // ==== Flash Functions ====
 
     ///
-    /// @dev Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
-    /// reserve0 = shortOptionTokens and reserve1 = underlyingTokens.
-    /// Uses underlyingTokens to mint long (option) + short (redeem) tokens.
-    /// Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair the shortOptionTokens,
-    /// AND any remainder quantity of underlyingTokens (paid by msg.sender).
+    /// @dev    Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
+    ///         reserve0 = shortOptionTokens and reserve1 = underlyingTokens.
+    ///         Uses underlyingTokens to mint long (option) + short (redeem) tokens.
+    ///         Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair the shortOptionTokens,
+    ///         AND any remainder quantity of underlyingTokens (paid by msg.sender).
     /// @notice If the first address in the path is not the shortOptionToken address, the tx will fail.
     /// @param optionAddress The address of the Option contract.
     /// @param flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
@@ -136,7 +136,7 @@ contract UniswapConnector03 is
         return (outputOptions, loanRemainder);
     }
 
-    /// @dev Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
+    /// @dev    Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
     /// @notice IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
     /// @param pairAddress The address of the redeemToken<>underlyingToken UniswapV2Pair contract.
     /// @param optionAddress The address of the longOptionTokes to close.
@@ -167,9 +167,9 @@ contract UniswapConnector03 is
     }
 
     ///
-    /// @dev Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
+    /// @dev    Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
     /// @notice IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
-    /// IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
+    ///         IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
     /// @param optionToken The option address.
     /// @param amountOptions The quantity of longOptionTokens to purchase.
     /// @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
@@ -223,8 +223,8 @@ contract UniswapConnector03 is
     }
 
     ///
-    /// @dev Closes a longOptionToken position by flash swapping in redeemTokens,
-    /// closing the option, and paying back in underlyingTokens.
+    /// @dev    Closes a longOptionToken position by flash swapping in redeemTokens,
+    ///         closing the option, and paying back in underlyingTokens.
     /// @notice IMPORTANT: If minPayout is 0, this function will cost the caller to close the option, for no gain.
     /// @param optionToken The address of the longOptionTokens to close.
     /// @param amountRedeems The quantity of redeemTokens to borrow to close the options.
@@ -280,9 +280,9 @@ contract UniswapConnector03 is
     // ==== Liquidity Functions ====
 
     ///
-    /// @dev Adds redeemToken liquidity to a redeem<>token pair by minting shortOptionTokens with underlyingTokens.
+    /// @dev    Adds redeemToken liquidity to a redeem<>token pair by minting shortOptionTokens with underlyingTokens.
     /// @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
-    /// underlyingToken -> redeemToken -> UNI-V2.
+    ///         underlyingToken -> redeemToken -> UNI-V2.
     /// @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
     /// @param quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
     /// @param amountBMax The minimum quantity of shortOptionTokens expected to provide liquidity with.
@@ -320,11 +320,11 @@ contract UniswapConnector03 is
     }
 
     ///
-    /// @dev Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
+    /// @dev    Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
     /// @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
-    /// Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
-    /// Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
-    /// UNI-V2 -> optionToken -> underlyingToken.
+    ///         Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
+    ///         Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
+    ///         UNI-V2 -> optionToken -> underlyingToken.
     /// @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
     /// @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
     /// @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
@@ -450,5 +450,33 @@ contract UniswapConnector03 is
     /// @dev Gets the version of the contract.
     function getVersion() external pure override returns (uint8) {
         return uint8(3);
+    }
+
+    /// @dev    Gets the total premium cost to buy `quantity` of `optionToken`s.
+    /// @notice Also returns the negative premium, which will be 0 in most cases.
+    /// @return premiumCost, premiumPayout
+    function getOpenPremium(IOption optionToken, uint256 quantity)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        return
+            UniswapConnectorLib03.getOpenPremium(router, optionToken, quantity);
+    }
+
+    /// @dev    Gets the total premium payout to sell `quantity` of `optionToken`s.
+    /// @notice Also gets the cost, a negative payout, which will most often be 0.
+    /// @return premiumPayout, premumCost
+    function getClosePremium(IOption optionToken, uint256 quantity)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        return
+            UniswapConnectorLib03.getClosePremium(
+                router,
+                optionToken,
+                quantity
+            );
     }
 }

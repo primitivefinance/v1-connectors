@@ -651,7 +651,6 @@ describe('UniswapConnector', () => {
       await trader.safeMint(optionToken.address, totalOptions, Alice)
       await trader.safeMint(optionToken.address, parseEther('100000'), Alice)
 
-      console.log(formatEther(await redeemToken.balanceOf(Alice)), formatEther(await underlyingToken.balanceOf(Alice)))
       // Add liquidity to redeem <> weth pair
       await uniswapRouter.addLiquidity(
         redeemToken.address,

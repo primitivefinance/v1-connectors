@@ -236,7 +236,7 @@ library UniswapConnectorLib03 {
         // Underlying Payout is the `premium` that the original caller receives in underlyingTokens.
         // It's the remainder of underlyingTokens after the pair has been paid back underlyingTokens for the
         // flash swapped shortOptionTokens.
-        (uint256 loanRemainder, uint256 underlyingPayout) =
+        (uint256 underlyingPayout, uint256 loanRemainder) =
             getClosePremium(router, IOption(optionAddress), flashLoanQuantity);
 
         // In most cases there will be an underlying payout, which is subtracted from the outputUnderlyings.
@@ -664,7 +664,7 @@ library UniswapConnectorLib03 {
         IUniswapV2Router02 router,
         IOption optionToken,
         uint256 quantity
-    ) internal returns (uint256, uint256) {
+    ) internal view returns (uint256, uint256) {
         // longOptionTokens are closed by doing a swap from underlyingTokens to redeemTokens.
         address[] memory path = new address[](2);
         path[0] = optionToken.getUnderlyingTokenAddress();
@@ -716,7 +716,7 @@ library UniswapConnectorLib03 {
             loanRemainder = underlyingCostRemaining;
         }
 
-        return (loanRemainder, underlyingPayout);
+        return (underlyingPayout, loanRemainder);
     }
 
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
