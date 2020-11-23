@@ -321,15 +321,15 @@ contract UniswapConnector03 is
 
     ///
     /// @dev Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
-    /// @notice Pulls UNI-V2 liquidity shares with shortOption<>quote token, and optionTokens from msg.sender.
+    /// @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
     /// Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
-    /// Sends quoteTokens from the burned UNI-V2 liquidity shares to the "to" address.
+    /// Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
     /// UNI-V2 -> optionToken -> underlyingToken.
     /// @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
     /// @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
     /// @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
-    /// @param amountBMin The minimum quantity of quoteTokens to receive from removing liquidity.
-    /// @param to The address that receives quoteTokens from burned UNI-V2, and underlyingTokens from closed options.
+    /// @param amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
+    /// @param to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
     /// @param deadline The timestamp to expire a pending transaction.
     ///
     function removeShortLiquidityThenCloseOptions(
@@ -348,21 +348,22 @@ contract UniswapConnector03 is
         uint256 redeemBalance = IERC20(redeemToken).balanceOf(address(this));
 
         // Remove liquidity by burning lp tokens from msg.sender, withdraw tokens to this contract.
+        // Notice: the `to` address is not passed into this function, because address(this) receives the withrawn tokens.
         (uint256 shortTokensWithdrawn, uint256 underlyingTokensWithdrawn) =
-            UniswapConnectorLib03._removeLiquidity(
-                router,
-                redeemToken,
-                underlyingTokenAddress,
+            UniswapConnectorLib03.removeLiquidity(
+                router, // UniswapV2Router02
+                redeemToken, // tokenA
+                underlyingTokenAddress, // tokenB
                 liquidity,
                 amountAMin,
                 amountBMin,
                 deadline
             );
 
-        // Send option and redeem tokens to the option contract from this contract, burn them, then receive underlying tokens.
+        // Burn option and redeem tokens from this contract then send underlyingTokens to the `to` address.
         (, , uint256 underlyingTokensFromClosedOptions) =
-            UniswapConnectorLib03._closeOptionsWithShortTokens(
-                trader,
+            UniswapConnectorLib03.closeOptionsWithShortTokens(
+                trader, // Primitive V1 Trader
                 IOption(optionAddress),
                 shortTokensWithdrawn,
                 to

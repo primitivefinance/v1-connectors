@@ -81,7 +81,8 @@ const getPremium = (quantityOptions, base, quote, redeemToken, underlyingToken, 
   let redeemCostRemaining = redeemsRequired.sub(redeemsMinted)
   // if redeemCost > 0
   let amountsOut = getAmountsOutPure(redeemCostRemaining, path, reserveIn, reserveOut)
-  let loanRemainder = amountsOut[1].mul(100101).add(amountsOut[1]).div(100000)
+  //let loanRemainder = amountsOut[1].mul(101101).add(amountsOut[1]).div(100000)
+  let loanRemainder = amountsOut[1].mul(100000).add(amountsOut[1].mul(301)).div(100000)
 
   let premium = loanRemainder
 
@@ -135,6 +136,7 @@ describe('UniswapConnector', () => {
     const uniswap = await setup.newUniswap(Admin, Alice, weth)
     uniswapFactory = uniswap.uniswapFactory
     uniswapRouter = uniswap.uniswapRouter
+    await uniswapFactory.setFeeTo(Alice)
 
     // Option parameters
     underlyingToken = weth
@@ -642,10 +644,14 @@ describe('UniswapConnector', () => {
 
       // Create UNISWAP PAIRS
       const ratio = 1050
-      const totalOptions = parseEther('20')
-      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await trader.safeMint(optionToken.address, totalOptions.add(parseEther('10')), Alice)
+      /* const totalOptions = parseEther('20')
+      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000) */
+      const totalOptions = '75716450507480110972130'
+      const totalRedeemForPair = '286685334476675940449501'
+      await trader.safeMint(optionToken.address, totalOptions, Alice)
+      await trader.safeMint(optionToken.address, parseEther('100000'), Alice)
 
+      console.log(formatEther(await redeemToken.balanceOf(Alice)), formatEther(await underlyingToken.balanceOf(Alice)))
       // Add liquidity to redeem <> weth pair
       await uniswapRouter.addLiquidity(
         redeemToken.address,
