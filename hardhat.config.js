@@ -23,7 +23,7 @@ Object.assign(module.exports, {
   networks: {
     coverage: {
       url: 'http://localhost:8555',
-      gas: 10000000,
+      gas: 12000000,
     },
     local: {
       url: 'http://127.0.0.1:8545',

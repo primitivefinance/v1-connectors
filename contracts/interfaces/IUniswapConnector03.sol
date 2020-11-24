@@ -73,7 +73,6 @@ interface IUniswapConnector03 {
 
     function removeShortLiquidityThenCloseOptions(
         address optionAddress,
-        address otherTokenAddress,
         uint256 liquidity,
         uint256 amountAMin,
         uint256 amountBMin,
