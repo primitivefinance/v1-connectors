@@ -44,7 +44,7 @@ const newWallets = async () => {
  */
 const newERC20 = async (signer, name, symbol, totalSupply) => {
   const ERC20 = await deployContract(signer, TestERC20, [name, symbol, totalSupply], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   return ERC20
 }
@@ -55,7 +55,7 @@ const newERC20 = async (signer, name, symbol, totalSupply) => {
  */
 const newWeth = async (signer) => {
   const weth = await deployContract(signer, Weth, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   return weth
 }
@@ -67,7 +67,7 @@ const newWeth = async (signer) => {
  */
 const newFlash = async (signer, optionToken) => {
   const flash = await deployContract(signer, Flash, [optionToken], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   return flash
 }
@@ -78,10 +78,10 @@ const newFlash = async (signer, optionToken) => {
  */
 const newRegistry = async (signer) => {
   const registry = await deployContract(signer, Registry, [], {
-    gasLimit: 6500000,
+    gasLimit: 9500000,
   })
   let oLib = await deployContract(signer, OptionTemplateLib, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   let opFacContract = Object.assign(OptionFactory, {
     evm: { bytecode: { object: OptionFactory.bytecode } },
@@ -89,10 +89,10 @@ const newRegistry = async (signer) => {
   link(opFacContract, OPTION_TEMPLATE_LIB, oLib.address)
 
   let optionFactory = await deployContract(signer, opFacContract, [registry.address], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   let rLib = await deployContract(signer, RedeemTemplateLib, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
 
   let reFacContract = Object.assign(RedeemFactory, {
@@ -101,7 +101,7 @@ const newRegistry = async (signer) => {
   link(reFacContract, REDEEM_TEMPLATE_LIB, rLib.address)
 
   let redeemTokenFactory = await deployContract(signer, reFacContract, [registry.address], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   await optionFactory.deployOptionTemplate()
   await redeemTokenFactory.deployRedeemTemplate()
@@ -117,7 +117,7 @@ const newRegistry = async (signer) => {
  */
 const newOptionFactory = async (signer, registry) => {
   let oLib = await deployContract(signer, OptionTemplateLib, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   let opFacContract = Object.assign(OptionFactory, {
     evm: { bytecode: { object: OptionFactory.bytecode } },
@@ -125,10 +125,10 @@ const newOptionFactory = async (signer, registry) => {
   link(opFacContract, OPTION_TEMPLATE_LIB, oLib.address)
 
   let optionFactory = await deployContract(signer, opFacContract, [registry.address], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   let rLib = await deployContract(signer, RedeemTemplateLib, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
 
   let reFacContract = Object.assign(RedeemFactory, {
@@ -137,7 +137,7 @@ const newOptionFactory = async (signer, registry) => {
   link(reFacContract, REDEEM_TEMPLATE_LIB, rLib.address)
 
   let redeemTokenFactory = await deployContract(signer, reFacContract, [registry.address], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   await optionFactory.deployOptionTemplate()
   await redeemTokenFactory.deployRedeemTemplate()
@@ -157,7 +157,7 @@ const newOptionFactory = async (signer, registry) => {
  */
 const newTestOption = async (signer, underlyingToken, strikeToken, base, quote, expiry) => {
   const optionToken = await deployContract(signer, OptionTest, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   await optionToken.initialize(underlyingToken, strikeToken, base, quote, expiry)
   return optionToken
@@ -172,7 +172,7 @@ const newTestOption = async (signer, underlyingToken, strikeToken, base, quote, 
  */
 const newTestRedeem = async (signer, factory, optionToken) => {
   const redeemToken = await deployContract(signer, Redeem, [], {
-    gasLimit: 6000000,
+    gasLimit: 9500000,
   })
   await redeemToken.initialize(factory, optionToken)
   return redeemToken
@@ -286,10 +286,10 @@ const newUniswapConnector = async (signer, params) => {
  */
 const newUniswap = async (signer, feeToSetter, WETH) => {
   const uniswapFactory = await deployContract(signer, UniswapV2Factory, [feeToSetter], {
-    gasLimit: 9000000,
+    gasLimit: 9500000,
   })
   const uniswapRouter = await deployContract(signer, UniswapV2Router02, [uniswapFactory.address, WETH.address], {
-    gasLimit: 9000000,
+    gasLimit: 9500000,
   })
   return { uniswapRouter, uniswapFactory }
 }

@@ -478,17 +478,15 @@ library UniswapConnectorLib03 {
             address(optionToken),
             quantity
         );
-        uint256 requiredOptions =
-            quantity.mul(optionToken.getBaseValue()).div(
-                optionToken.getQuoteValue()
-            );
+        uint256 requiredLongOptions =
+            getProportionalLongOptions(optionToken, quantity);
 
         // Send out the required amount of options from the `from` address.
         // WARNING: CALLS TO UNTRUSTED ADDRESS.
         IERC20(address(optionToken)).safeTransferFrom(
             from,
             address(optionToken),
-            requiredOptions
+            requiredLongOptions
         );
 
         // Close the options.
@@ -555,23 +553,20 @@ library UniswapConnectorLib03 {
         IERC20(optionToken.redeemToken()).approve(address(trader), uint256(-1));
         // Calculate equivalent quantity of redeem (short option) tokens to close the long option position.
         // longOptions = shortOptions / strikeRatio
-        uint256 requiredLongOptionTokens =
-            amountShortOptions.mul(optionToken.getBaseValue()).div(
-                optionToken.getQuoteValue()
-            );
+        uint256 requiredLongOptions =
+            getProportionalLongOptions(optionToken, amountShortOptions);
 
         // Pull the required longOptionTokens from `msg.sender` to this contract.
         IERC20(address(optionToken)).safeTransferFrom(
             msg.sender,
             address(this),
-            requiredLongOptionTokens
+            requiredLongOptions
         );
 
         // Trader pulls option and redeem tokens from this contract and sends them to the option contract.
         // Option and redeem tokens are then burned to release underlyingTokens.
         // UnderlyingTokens are sent to the "receiver" address.
-        return
-            trader.safeClose(optionToken, requiredLongOptionTokens, receiver);
+        return trader.safeClose(optionToken, requiredLongOptions, receiver);
     }
 
     // ====== View ======
@@ -598,9 +593,7 @@ library UniswapConnectorLib03 {
         // `quantity` of underlyingTokens are output from the swap.
         // They are used to mint options, which will mint `quantity` * quoteValue / baseValue amount of redeemTokens.
         uint256 redeemsMinted =
-            quantity.mul(optionToken.getQuoteValue()).div(
-                optionToken.getBaseValue()
-            );
+            getProportionalShortOptions(optionToken, quantity);
 
         // The loanRemainderInUnderlyings will be the amount of underlyingTokens that are needed from the original
         // transaction caller in order to pay the flash swap.
@@ -670,9 +663,7 @@ library UniswapConnectorLib03 {
         path[0] = optionToken.getUnderlyingTokenAddress();
         path[1] = optionToken.redeemToken();
         uint256 outputUnderlyings =
-            quantity.mul(optionToken.getBaseValue()).div(
-                optionToken.getQuoteValue()
-            );
+            getProportionalLongOptions(optionToken, quantity);
         // The loanRemainder will be the amount of underlyingTokens that are needed from the original
         // transaction caller in order to pay the flash swap.
         uint256 loanRemainder;
@@ -718,6 +709,33 @@ library UniswapConnectorLib03 {
 
         return (underlyingPayout, loanRemainder);
     }
+
+    // ==== Primitive V1 =====
+    function getProportionalLongOptions(
+        IOption optionToken,
+        uint256 quantityShort
+    ) internal view returns (uint256) {
+        uint256 quantityLong =
+            quantityShort.mul(optionToken.getBaseValue()).div(
+                optionToken.getQuoteValue()
+            );
+
+        return quantityLong;
+    }
+
+    function getProportionalShortOptions(
+        IOption optionToken,
+        uint256 quantityLong
+    ) internal view returns (uint256) {
+        uint256 quantityShort =
+            quantityLong.mul(optionToken.getQuoteValue()).div(
+                optionToken.getBaseValue()
+            );
+
+        return quantityShort;
+    }
+
+    // ==== Uniswap V2 Library =====
 
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
     function sortTokens(address tokenA, address tokenB)
