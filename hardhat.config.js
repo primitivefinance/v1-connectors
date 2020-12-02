@@ -9,6 +9,7 @@ require('dotenv').config()
 require('@nomiclabs/hardhat-etherscan')
 require('@nomiclabs/hardhat-waffle')
 require('hardhat-deploy')
+require('hardhat-gas-reporter')
 require('solidity-coverage')
 
 // == Environment ==
@@ -55,6 +56,11 @@ Object.assign(module.exports, {
     url: 'https://api-rinkeby.etherscan.io/api',
     apiKey: ETHERSCAN_API_KEY,
     etherscanApiKey: ETHERSCAN_API_KEY,
+  },
+  gasReporter: {
+    currency: 'USD',
+    showTimeSpent: true,
+    enabled: true,
   },
   solidity: {
     version: '0.6.2',

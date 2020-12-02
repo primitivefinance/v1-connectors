@@ -6,6 +6,11 @@
     "node": ">=10"
   },
   "main": "index.js",
+  "files": [
+    "build",
+    "contracts",
+    "deployments"
+  ],
   "scripts": {
     "test": "cross-env hardhat test",
     "test:uni": "cross-env hardhat test ./test/test_uni_connector.spec.js",
@@ -50,6 +55,7 @@
     "ethers": "^5.0.19",
     "hardhat": "^2.0.2",
     "hardhat-deploy": "^0.7.0-beta.28",
+    "hardhat-gas-reporter": "^1.0.2",
     "mocha": "^8.2.1",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.1.2",
