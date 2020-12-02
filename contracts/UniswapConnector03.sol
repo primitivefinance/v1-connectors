@@ -3,7 +3,7 @@ pragma solidity 0.6.2;
 
 ///
 /// @title   Combines Uniswap V2 Protocol functions with Primitive V1.
-/// @notice  Primitive V1 UniswapConnector03 - @primitivefi/contracts@v0.4.2
+/// @notice  Primitive V1 UniswapConnector03 - @primitivefi/v1-connectors@v1.2.2
 /// @author  Primitive
 ///
 
@@ -22,6 +22,9 @@ import {
     ITrader,
     IERC20
 } from "./interfaces/IUniswapConnector03.sol";
+import {
+    TraderLib
+} from "@primitivefi/contracts/contracts/option/libraries/TraderLib.sol";
 import {UniswapConnectorLib03} from "./libraries/UniswapConnectorLib03.sol";
 // Open Zeppelin
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
@@ -29,6 +32,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
     ReentrancyGuard
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+import "hardhat/console.sol";
 
 contract UniswapConnector03 is
     IUniswapConnector03,
@@ -45,6 +50,7 @@ contract UniswapConnector03 is
     event Initialized(address indexed from); // Emmitted on deployment
     event FlashOpened(address indexed from, uint256 quantity, uint256 premium); // Emmitted on flash opening a long position
     event FlashClosed(address indexed from, uint256 quantity, uint256 payout);
+    event WroteOption(address indexed from, uint256 quantity);
 
     // ==== Constructor ====
 
@@ -95,6 +101,27 @@ contract UniswapConnector03 is
                 to,
                 deadline
             );
+        return success;
+    }
+
+    /// @dev    Write options by minting option tokens and selling the long option tokens for premium.
+    /// @notice IMPORTANT: if `minPayout` is 0, this function can cost the caller `underlyingToken`s.
+    /// @param optionToken The option contract to underwrite.
+    /// @param writeQuantity The quantity of option tokens to write and equally, the quantity of underlyings to deposit.
+    /// @param minPayout The minimum amount of underlyingTokens to receive from selling long option tokens.
+    function mintOptionsThenFlashCloseLong(
+        IOption optionToken,
+        uint256 writeQuantity,
+        uint256 minPayout
+    ) external returns (bool) {
+        // Pulls underlyingTokens from `msg.sender` using `transferFrom`. Mints option tokens to `msg.sender`.
+        (, uint256 outputRedeems) =
+            TraderLib.safeMint(optionToken, writeQuantity, msg.sender);
+
+        // Sell the long option tokens for underlyingToken premium.
+        bool success = closeFlashLong(optionToken, outputRedeems, minPayout);
+        require(success, "ERR_FLASH_CLOSE");
+        emit WroteOption(msg.sender, writeQuantity);
         return success;
     }
 
@@ -234,7 +261,7 @@ contract UniswapConnector03 is
         IOption optionToken,
         uint256 amountRedeems,
         uint256 minPayout
-    ) external override nonReentrant returns (bool) {
+    ) public override nonReentrant returns (bool) {
         address redeemToken = optionToken.redeemToken();
         address underlyingToken = optionToken.getUnderlyingTokenAddress();
         address pairAddress = factory.getPair(redeemToken, underlyingToken);
@@ -454,20 +481,28 @@ contract UniswapConnector03 is
 
     /// @dev    Gets the total premium cost to buy `quantity` of `optionToken`s.
     /// @notice Also returns the negative premium, which will be 0 in most cases.
+    /// @param  optionToken The option to get the close premium of.
+    /// @param  quantityLong The quantity of long option tokens that will be closed.
     /// @return premiumCost, premiumPayout
-    function getOpenPremium(IOption optionToken, uint256 quantity)
+    function getOpenPremium(IOption optionToken, uint256 quantityLong)
         external
         view
         returns (uint256, uint256)
     {
         return
-            UniswapConnectorLib03.getOpenPremium(router, optionToken, quantity);
+            UniswapConnectorLib03.getOpenPremium(
+                router,
+                optionToken,
+                quantityLong
+            );
     }
 
-    /// @dev    Gets the total premium payout to sell `quantity` of `optionToken`s.
-    /// @notice Also gets the cost, a negative payout, which will most often be 0.
+    /// @dev    Gets the total premium payout to sell long option tokens proportional to `quantity` of `shortOptionToken`s.
+    /// @notice Also gets the cost, a negative payout, which will be 0 unless the reserve ratio is incorrectly set.
+    /// @param  optionToken The option to get the close premium of.
+    /// @param  quantityShort The quantity of short option tokens that will be closed.
     /// @return premiumPayout, premumCost
-    function getClosePremium(IOption optionToken, uint256 quantity)
+    function getClosePremium(IOption optionToken, uint256 quantityShort)
         external
         view
         returns (uint256, uint256)
@@ -476,7 +511,7 @@ contract UniswapConnector03 is
             UniswapConnectorLib03.getClosePremium(
                 router,
                 optionToken,
-                quantity
+                quantityShort
             );
     }
 }
