@@ -2,7 +2,7 @@ pragma solidity 0.6.2;
 
 ///
 /// @title   Library for business logic for connecting Uniswap V2 Protocol functions with Primitive V1.
-/// @notice  Primitive V1 UniswapConnectorLib03 - @primitivefi/contracts@v0.4.5
+/// @notice  Primitive V1 UniswapConnectorLib03 - @primitivefi/v1-connectors@v1.2.2
 /// @author  Primitive
 ///
 
@@ -579,7 +579,7 @@ library UniswapConnectorLib03 {
     ///         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
     /// @param  router The UniswapV2Router02 contract.
     /// @param  optionToken The optionToken to get the premium cost of purchasing.
-    /// @param  quantity The size of the order to get the premium cost of.
+    /// @param  quantity The quantity of long option tokens that will be purchased.
     function getOpenPremium(
         IUniswapV2Router02 router,
         IOption optionToken,
@@ -653,6 +653,10 @@ library UniswapConnectorLib03 {
         return (loanRemainderInUnderlyings, negativePremiumPaymentInRedeems);
     }
 
+    /// @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
+    /// @param  router The UniswapV2Router02 contract.
+    /// @param  optionToken The optionToken to get the premium cost of purchasing.
+    /// @param  quantity The quantity of short option tokens that will be closed.
     function getClosePremium(
         IUniswapV2Router02 router,
         IOption optionToken,
@@ -711,6 +715,9 @@ library UniswapConnectorLib03 {
     }
 
     // ==== Primitive V1 =====
+
+    /// @dev    Calculates the proportional quantity of long option tokens per short option token.
+    /// @notice For each long option token, there is quoteValue / baseValue quantity of short option tokens.
     function getProportionalLongOptions(
         IOption optionToken,
         uint256 quantityShort
@@ -723,6 +730,8 @@ library UniswapConnectorLib03 {
         return quantityLong;
     }
 
+    /// @dev    Calculates the proportional quantity of short option tokens per long option token.
+    /// @notice For each short option token, there is baseValue / quoteValue quantity of long option tokens.
     function getProportionalShortOptions(
         IOption optionToken,
         uint256 quantityLong
