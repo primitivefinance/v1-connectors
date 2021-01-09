@@ -252,7 +252,7 @@ contract PrimitiveRouter is
         // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
         // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
         uint256 inputOptions =
-            getProportionalLongOptions(optionToken, msg.value);
+            getProportionalLongOptions(optionToken, inputStrikes);
 
         // Fail early if msg.sender does not have enough optionTokens to burn.
         require(
@@ -452,7 +452,7 @@ contract PrimitiveRouter is
         return (inputRedeems, inputOptions, outUnderlyings);
     }
 
-    // ==== Combo Operations ====
+    // ==== Swap Operations ====
 
     /**
      * @dev    Write options by minting option tokens and selling the long option tokens for premium.
@@ -476,8 +476,6 @@ contract PrimitiveRouter is
         emit WroteOption(msg.sender, writeQuantity);
         return success;
     }
-
-    // ==== Flash Functions ====
 
     /**
      * @dev    Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
@@ -593,6 +591,90 @@ contract PrimitiveRouter is
     // ==== Liquidity Functions ====
 
     /**
+    * @dev    Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+    * @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
+    *         underlyingToken -> redeemToken -> UNI-V2.
+    * @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
+    * @param quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
+    * @param amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
+    * @param amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
+    * @param to The address that receives UNI-V2 shares.
+    * @param deadline The timestamp to expire a pending transaction.
+    */
+    function addShortLiquidityWithUnderlying(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    )
+        public
+        override
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        uint256 amountA;
+        uint256 amountB;
+        uint256 liquidity;
+        // Pulls underlyingTokens from msg.sender to this contract.
+        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
+        // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
+        (, uint256 outputRedeems) =
+            safeMint(IOption(optionAddress), quantityOptions, address(this));
+        // Send longOptionTokens from minting option operation to msg.sender.
+        IERC20(optionAddress).safeTransfer(msg.sender, quantityOptions);
+
+        {
+            // scope for adding exact liquidity, avoids stack too deep errors
+            IOption optionToken = IOption(optionAddress);
+            address underlyingToken = optionToken.getUnderlyingTokenAddress();
+            uint256 outputRedeems_ = outputRedeems;
+            uint256 amountBMax_ = amountBMax;
+            uint256 amountBMin_ = amountBMin;
+            address to_ = to;
+            uint256 deadline_ = deadline;
+            // Pull `tokenB` from msg.sender to add to Uniswap V2 Pair.
+            // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
+            IERC20(underlyingToken).safeTransferFrom(
+                msg.sender,
+                address(this),
+                amountBMax_
+            );
+            // Approves Uniswap V2 Pair pull tokens from this contract.
+            IERC20(optionToken.redeemToken()).approve(
+                address(router),
+                uint256(-1)
+            );
+            IERC20(underlyingToken).approve(address(router), uint256(-1));
+
+            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "to" address.
+            (amountA, amountB, liquidity) = router.addLiquidity(
+                optionToken.redeemToken(),
+                underlyingToken,
+                outputRedeems_,
+                amountBMax_,
+                outputRedeems_,
+                amountBMin_,
+                to_,
+                deadline_
+            );
+            // check for exact liquidity provided
+            assert(amountA == outputRedeems);
+
+            uint256 remainder =
+                amountBMax_ > amountB ? amountBMax_.sub(amountB) : 0;
+            if (remainder > 0) {
+                IERC20(underlyingToken).safeTransfer(msg.sender, remainder);
+            }
+        }
+        return (amountA, amountB, liquidity);
+    }
+
+    /**
      * @dev    Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
      * @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
      *         Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
@@ -700,94 +782,24 @@ contract PrimitiveRouter is
         );
     }
 
-    // ==== WETH Operations ====
-
-    /**
-     * @dev Deposits msg.value of ethers into WETH contract. Then sends WETH to "to".
-     * @param to The address to send WETH ERC-20 tokens to.
-     */
-    function _depositEthSendWeth(address to) internal {
-        // Deposit the ethers received from msg.value into the WETH contract.
-        weth.deposit.value(msg.value)();
-
-        // Send WETH.
-        weth.transfer(to, msg.value);
-    }
-
-    /**
-     * @dev Unwraps WETH to withrdaw ethers, which are then sent to the "to" address.
-     * @param to The address to send withdrawn ethers to.
-     * @param quantity The quantity of WETH to unwrap.
-     */
-    function _withdrawEthAndSend(address to, uint256 quantity) internal {
-        // Withdraw ethers with weth.
-        weth.withdraw(quantity);
-
-        // Send ether.
-        (bool success, ) = to.call.value(quantity)("");
-
-        // Revert is call is unsuccessful.
-        require(success, "ERR_SENDING_ETHER");
-    }
-
-    // ==== Callback Implementation ====
-
-    /**
-     * @dev The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
-     * @param sender The original msg.sender of the UniswapV2Pair.swap() call.
-     * @param amount0 The quantity of token0 received to the `to` address in the swap() call.
-     * @param amount1 The quantity of token1 received to the `to` address in the swap() call.
-     * @param data The payload passed in the `data` parameter of the swap() call.
-     */
-    function uniswapV2Call(
-        address sender,
-        uint256 amount0,
-        uint256 amount1,
-        bytes calldata data
-    ) external override {
-        address token0 = IUniswapV2Pair(msg.sender).token0();
-        address token1 = IUniswapV2Pair(msg.sender).token1();
-        assert(msg.sender == factory.getPair(token0, token1)); /// ensure that msg.sender is actually a V2 pair
-        (bool success, bytes memory returnData) = address(this).call(data);
-        require(
-            success &&
-                (returnData.length == 0 || abi.decode(returnData, (bool))),
-            "ERR_UNISWAPV2_CALL_FAIL"
-        );
-    }
-
-    // ==== View ====
-
-    /// @dev Gets the name of the contract.
-    function getName() external pure override returns (string memory) {
-        return "PrimitiveRouter";
-    }
-
-    /// @dev Gets the version of the contract.
-    function getVersion() external pure override returns (uint8) {
-        return uint8(1);
-    }
-
-    // ==== LIBRARY ====
-
     // ==== Flash Functions ====
 
-    ///
-    /// @dev    Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
-    ///         shortOptionTokens and underlyingTokens.
-    ///         Uses underlyingTokens to mint long (option) + short (redeem) tokens.
-    ///         Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair with shortOptionTokens,
-    ///         AND any remainder quantity of underlyingTokens (paid by msg.sender).
-    /// @notice If the first address in the path is not the shortOptionToken address, the tx will fail.
-    ///         IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
-    /// @param pairAddress The address of the redeemToken<>underlyingToken UniswapV2Pair contract.
-    /// @param optionAddress The address of the Option contract.
-    /// @param flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
-    /// @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
-    /// @param path The token addresses to trade through using their Uniswap V2 pools. Assumes path[0] = shortOptionToken.
-    /// @param to The address to send the shortOptionToken proceeds and longOptionTokens to.
-    /// @return success bool Whether the transaction was successful or not.
-    ///
+    /**
+    * @dev    Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
+    *         shortOptionTokens and underlyingTokens.
+    *         Uses underlyingTokens to mint long (option) + short (redeem) tokens.
+    *         Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair with shortOptionTokens,
+    *         AND any remainder quantity of underlyingTokens (paid by msg.sender).
+    * @notice If the first address in the path is not the shortOptionToken address, the tx will fail.
+    *         IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
+    * @param pairAddress The address of the redeemToken<>underlyingToken UniswapV2Pair contract.
+    * @param optionAddress The address of the Option contract.
+    * @param flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
+    * @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
+    * @param path The token addresses to trade through using their Uniswap V2 pools. Assumes path[0] = shortOptionToken.
+    * @param to The address to send the shortOptionToken proceeds and longOptionTokens to.
+    * @return success bool Whether the transaction was successful or not.
+    */
     function flashMintShortOptionsThenSwap(
         address pairAddress,
         address optionAddress,
@@ -868,14 +880,16 @@ contract PrimitiveRouter is
         return (mintedOptions, loanRemainder);
     }
 
-    /// @dev    Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
-    /// @notice IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
-    /// @param pairAddress The address of the redeemToken<>underlyingToken UniswapV2Pair contract.
-    /// @param optionAddress The address of the longOptionTokes to close.
-    /// @param flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
-    /// @param minPayout The minimum payout of underlyingTokens sent to the `to` address.
-    /// @param path underlyingTokens -> shortOptionTokens, because we are paying the input of underlyingTokens.
-    /// @param to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
+    /**
+    * @dev    Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
+    * @notice IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
+    * @param pairAddress The address of the redeemToken<>underlyingToken UniswapV2Pair contract.
+    * @param optionAddress The address of the longOptionTokes to close.
+    * @param flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
+    * @param minPayout The minimum payout of underlyingTokens sent to the `to` address.
+    * @param path underlyingTokens -> shortOptionTokens, because we are paying the input of underlyingTokens.
+    * @param to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
+     */
     function flashCloseLongOptionsThenSwap(
         address pairAddress,
         address optionAddress,
@@ -966,102 +980,88 @@ contract PrimitiveRouter is
         return (outputUnderlyings, underlyingPayout);
     }
 
-    // ==== Liquidity Functions ====
+    // ==== WETH Operations ====
 
-    ///
-    /// @dev    Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
-    /// @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
-    ///         underlyingToken -> redeemToken -> UNI-V2.
-    /// @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
-    /// @param quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
-    /// @param amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
-    /// @param amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
-    /// @param to The address that receives UNI-V2 shares.
-    /// @param deadline The timestamp to expire a pending transaction.
-    ///
-    function addShortLiquidityWithUnderlying(
-        address optionAddress,
-        uint256 quantityOptions,
-        uint256 amountBMax,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    )
-        public
-        override
-        returns (
-            uint256,
-            uint256,
-            uint256
-        )
-    {
-        uint256 amountA;
-        uint256 amountB;
-        uint256 liquidity;
-        // Pulls underlyingTokens from msg.sender to this contract.
-        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-        // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
-        (, uint256 outputRedeems) =
-            safeMint(IOption(optionAddress), quantityOptions, address(this));
-        // Send longOptionTokens from minting option operation to msg.sender.
-        IERC20(optionAddress).safeTransfer(msg.sender, quantityOptions);
+    /**
+     * @dev Deposits msg.value of ethers into WETH contract. Then sends WETH to "to".
+     * @param to The address to send WETH ERC-20 tokens to.
+     */
+    function _depositEthSendWeth(address to) internal {
+        // Deposit the ethers received from msg.value into the WETH contract.
+        weth.deposit.value(msg.value)();
 
-        {
-            // scope for adding exact liquidity, avoids stack too deep errors
-            IOption optionToken = IOption(optionAddress);
-            address underlyingToken = optionToken.getUnderlyingTokenAddress();
-            uint256 outputRedeems_ = outputRedeems;
-            uint256 amountBMax_ = amountBMax;
-            uint256 amountBMin_ = amountBMin;
-            address to_ = to;
-            uint256 deadline_ = deadline;
-            // Pull `tokenB` from msg.sender to add to Uniswap V2 Pair.
-            // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
-            IERC20(underlyingToken).safeTransferFrom(
-                msg.sender,
-                address(this),
-                amountBMax_
-            );
-            // Approves Uniswap V2 Pair pull tokens from this contract.
-            IERC20(optionToken.redeemToken()).approve(
-                address(router),
-                uint256(-1)
-            );
-            IERC20(underlyingToken).approve(address(router), uint256(-1));
-
-            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "to" address.
-            (amountA, amountB, liquidity) = router.addLiquidity(
-                optionToken.redeemToken(),
-                underlyingToken,
-                outputRedeems_,
-                amountBMax_,
-                outputRedeems_,
-                amountBMin_,
-                to_,
-                deadline_
-            );
-            // check for exact liquidity provided
-            assert(amountA == outputRedeems);
-
-            uint256 remainder =
-                amountBMax_ > amountB ? amountBMax_.sub(amountB) : 0;
-            if (remainder > 0) {
-                IERC20(underlyingToken).safeTransfer(msg.sender, remainder);
-            }
-        }
-        return (amountA, amountB, liquidity);
+        // Send WETH.
+        weth.transfer(to, msg.value);
     }
 
-    // ====== View ======
+    /**
+     * @dev Unwraps WETH to withrdaw ethers, which are then sent to the "to" address.
+     * @param to The address to send withdrawn ethers to.
+     * @param quantity The quantity of WETH to unwrap.
+     */
+    function _withdrawEthAndSend(address to, uint256 quantity) internal {
+        // Withdraw ethers with weth.
+        weth.withdraw(quantity);
 
-    /// @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
-    /// @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
-    ///         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
-    ///         Buying negative premium options will pay out redeemTokens.
-    ///         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
-    ///         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
-    /// @param  optionToken The optionToken to get the premium cost of purchasing.
-    /// @param  quantity The quantity of long option tokens that will be purchased.
+        // Send ether.
+        (bool success, ) = to.call.value(quantity)("");
+
+        // Revert is call is unsuccessful.
+        require(success, "ERR_SENDING_ETHER");
+    }
+
+    // ==== Callback Implementation ====
+
+    /**
+     * @dev The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
+     * @param sender The original msg.sender of the UniswapV2Pair.swap() call.
+     * @param amount0 The quantity of token0 received to the `to` address in the swap() call.
+     * @param amount1 The quantity of token1 received to the `to` address in the swap() call.
+     * @param data The payload passed in the `data` parameter of the swap() call.
+     */
+    function uniswapV2Call(
+        address sender,
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata data
+    ) external override {
+        address token0 = IUniswapV2Pair(msg.sender).token0();
+        address token1 = IUniswapV2Pair(msg.sender).token1();
+        assert(msg.sender == factory.getPair(token0, token1)); /// ensure that msg.sender is actually a V2 pair
+        (bool success, bytes memory returnData) = address(this).call(data);
+        require(
+            success &&
+                (returnData.length == 0 || abi.decode(returnData, (bool))),
+            "ERR_UNISWAPV2_CALL_FAIL"
+        );
+    }
+
+    // ==== View ====
+
+    /**
+    * @dev Gets the name of the contract.
+     */
+    function getName() external pure override returns (string memory) {
+        return "PrimitiveRouter";
+    }
+
+    /**
+    * @dev Gets the version of the contract.
+     */ 
+    function getVersion() external pure override returns (uint8) {
+        return uint8(1);
+    }
+
+    /**
+    * @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
+    * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
+    *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
+    *         Buying negative premium options will pay out redeemTokens.
+    *         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
+    *         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
+    * @param  optionToken The optionToken to get the premium cost of purchasing.
+    * @param  quantity The quantity of long option tokens that will be purchased.
+     */
     function getOpenPremium(IOption optionToken, uint256 quantity)
         public
         view
@@ -1136,9 +1136,11 @@ contract PrimitiveRouter is
         return (loanRemainderInUnderlyings, negativePremiumPaymentInRedeems);
     }
 
-    /// @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
-    /// @param  optionToken The optionToken to get the premium cost of purchasing.
-    /// @param  quantity The quantity of short option tokens that will be closed.
+    /**
+    * @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
+    * @param  optionToken The optionToken to get the premium cost of purchasing.
+    * @param  quantity The quantity of short option tokens that will be closed.
+     */
     function getClosePremium(IOption optionToken, uint256 quantity)
         public
         view
@@ -1197,10 +1199,10 @@ contract PrimitiveRouter is
         return (underlyingPayout, loanRemainder);
     }
 
-    // ==== Primitive V1 =====
-
-    /// @dev    Calculates the proportional quantity of long option tokens per short option token.
-    /// @notice For each long option token, there is quoteValue / baseValue quantity of short option tokens.
+    /**
+    * @dev    Calculates the proportional quantity of long option tokens per short option token.
+    * @notice For each long option token, there is quoteValue / baseValue quantity of short option tokens.
+     */
     function getProportionalLongOptions(
         IOption optionToken,
         uint256 quantityShort
@@ -1213,8 +1215,10 @@ contract PrimitiveRouter is
         return quantityLong;
     }
 
-    /// @dev    Calculates the proportional quantity of short option tokens per long option token.
-    /// @notice For each short option token, there is baseValue / quoteValue quantity of long option tokens.
+    /** 
+     * @dev    Calculates the proportional quantity of short option tokens per long option token.
+     * @notice For each short option token, there is baseValue / quoteValue quantity of long option tokens.
+     */
     function getProportionalShortOptions(
         IOption optionToken,
         uint256 quantityLong
