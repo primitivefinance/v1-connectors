@@ -15,6 +15,8 @@ const WethConnector = require('../../build/contracts/WethConnector01.sol/WethCon
 const UniswapConnector = require('../../build/contracts/UniswapConnector03.sol/UniswapConnector03')
 const OptionTemplateLib = require('@primitivefi/contracts/artifacts/OptionTemplateLib')
 const RedeemTemplateLib = require('@primitivefi/contracts/artifacts/RedeemTemplateLib')
+const PrimitiveRouter = require('../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter')
+const PrimitiveRouterTest = require('../../build/contracts/test/PrimitiveRouterTest.sol/PrimitiveRouterTest')
 
 // Constants and Utility functions
 const constants = require('./constants')
@@ -278,6 +280,20 @@ const newUniswapConnector = async (signer, params) => {
   return connector
 }
 
+const newRouter = async (signer, params) => {
+  const router = await deployContract(signer, PrimitiveRouter, params, {
+    gasLimit: 9500000,
+  })
+  return router
+}
+
+const newTestRouter = async (signer, params) => {
+  const router = await deployContract(signer, PrimitiveRouterTest, params, {
+    gasLimit: 9500000,
+  })
+  return router
+}
+
 /**
  * @dev Deploys a new Uniswap factory and router instance for testing.
  * @param {*} signer
@@ -321,4 +337,6 @@ Object.assign(module.exports, {
   approveToken,
   newTrader,
   newWethConnector,
+  newRouter,
+  newTestRouter
 })
