@@ -30,6 +30,8 @@ import {
     ReentrancyGuard
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import "hardhat/console.sol";
+
 contract PrimitiveRouter is
     IPrimitiveRouter,
     IUniswapV2Callee,
@@ -61,6 +63,10 @@ contract PrimitiveRouter is
         require(address(weth) == address(0x0), "ERR_INITIALIZED");
         weth = IWETH(weth_);
         emit Initialized(msg.sender);
+    }
+
+    receive() external payable {
+        assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
     }
 
     // ==== Primitive Core ====
@@ -478,6 +484,27 @@ contract PrimitiveRouter is
     }
 
     /**
+     * @dev    Write WETH options using ETH and sell them for premium.
+     * @notice IMPORTANT: if `minPayout` is 0, this function can cost the caller `underlyingToken`s.
+     * @param optionToken The option contract to underwrite.
+     * @param minPayout The minimum amount of underlyingTokens to receive from selling long option tokens.
+     */
+    function mintETHOptionsThenFlashCloseLong(
+        IOption optionToken,
+        uint256 minPayout
+    ) external payable returns (bool) {
+        // Mints WETH options uses an ether balance `msg.value`.
+        (, uint256 outputRedeems) =
+            safeMintWithETH(optionToken, msg.sender);
+
+        // Sell the long option tokens for underlyingToken premium.
+        bool success = closeFlashLong(optionToken, outputRedeems, minPayout);
+        require(success, "ERR_FLASH_CLOSE");
+        emit WroteOption(msg.sender, msg.value);
+        return success;
+    }
+
+    /**
      * @dev    Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
      * @notice IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
      *         IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
@@ -675,6 +702,98 @@ contract PrimitiveRouter is
     }
 
     /**
+    * @dev    Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+    * @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
+    *         underlyingToken -> redeemToken -> UNI-V2.
+    * @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
+    * @param quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
+    * @param amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
+    * @param amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
+    * @param to The address that receives UNI-V2 shares.
+    * @param deadline The timestamp to expire a pending transaction.
+    */
+    function addShortLiquidityWithETH(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    )
+        public
+        payable
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        require(quantityOptions.add(amountBMax) >= msg.value, "ERR_NOT_ENOUGH_ETH");
+
+        uint256 amountA;
+        uint256 amountB;
+        uint256 liquidity;
+        // Pulls underlyingTokens from msg.sender to this contract.
+        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
+        // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
+        // Deposit the ethers received from msg.value into the WETH contract.
+        weth.deposit.value(quantityOptions)();
+        // Send WETH to option. Remainder ETH will be pulled from Uniswap V2 Router for adding liquidity.
+        weth.transfer(optionAddress, quantityOptions);
+        // Mint options
+        (, uint256 outputRedeems) =
+            IOption(optionAddress).mintOptions(address(this));
+        // Send longOptionTokens from minting option operation to msg.sender.
+        IERC20(optionAddress).safeTransfer(msg.sender, quantityOptions);
+
+        {
+            // scope for adding exact liquidity, avoids stack too deep errors
+            IOption optionToken = IOption(optionAddress);
+            address underlyingToken = optionToken.getUnderlyingTokenAddress();
+            uint256 outputRedeems_ = outputRedeems;
+            uint256 amountBMax_ = amountBMax;
+            uint256 amountBMin_ = amountBMin;
+            address to_ = to;
+            uint256 deadline_ = deadline;
+            // Pull `tokenB` from msg.sender to add to Uniswap V2 Pair.
+            // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
+            /* IERC20(underlyingToken).safeTransferFrom(
+                msg.sender,
+                address(this),
+                amountBMax_
+            ); */
+            // Approves Uniswap V2 Pair pull tokens from this contract.
+            IERC20(optionToken.redeemToken()).approve(
+                address(router),
+                uint256(-1)
+            );
+            IERC20(underlyingToken).approve(address(router), uint256(-1));
+
+            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "to" address.
+            (amountA, amountB, liquidity) = router.addLiquidityETH.value(amountBMax_)(
+                optionToken.redeemToken(),
+                outputRedeems_,
+                outputRedeems_,
+                amountBMin_,
+                to_,
+                deadline_
+            );
+            // check for exact liquidity provided
+            assert(amountA == outputRedeems);
+
+            uint256 remainder =
+                amountBMax_ > amountB ? amountBMax_.sub(amountB) : 0;
+            if (remainder > 0) {
+                // Send ether.
+                (bool success, ) = msg.sender.call.value(remainder)("");
+                // Revert is call is unsuccessful.
+                require(success, "ERR_SENDING_ETHER");
+            }
+        }
+        return (amountA, amountB, liquidity);
+    }
+
+    /**
      * @dev    Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
      * @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
      *         Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
@@ -857,13 +976,10 @@ contract PrimitiveRouter is
 
         // If loanRemainder is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
         if (loanRemainder > 0) {
+            address pairAddress_ = pairAddress;
             // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
             require(maxPremium >= loanRemainder, "ERR_PREMIUM_OVER_MAX"); // check for users to not pay over their max desired value.
-            IERC20(underlyingToken).safeTransferFrom(
-                to,
-                pairAddress,
-                loanRemainder
-            );
+            _payPremium(to, underlyingToken, pairAddress_, loanRemainder);
         }
 
         // If negativePremiumAmount is non-zero and non-negative, send redeemTokens to the `to` address.
@@ -973,7 +1089,8 @@ contract PrimitiveRouter is
         if (underlyingPayout > 0) {
             // Revert if minPayout is greater than the actual payout.
             require(underlyingPayout >= minPayout, "ERR_PREMIUM_UNDER_MIN");
-            IERC20(underlyingToken).safeTransfer(to, underlyingPayout);
+            bool success = _payoutPremium(to, underlyingToken, underlyingPayout);
+            require(success, "PrimitiveRouter: PAYOUT_FAIL");
         }
 
         emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
@@ -981,6 +1098,50 @@ contract PrimitiveRouter is
     }
 
     // ==== WETH Operations ====
+
+    /**
+     * @dev Pays underlyingTokens to a Uniswap V2 Pair to open a long option position.
+     */
+    function _payPremium(address from, address underlyingToken, address pairAddress, uint amount) internal returns (bool) {
+        if(underlyingToken == address(weth)) {
+            return _payPremiumInETH(pairAddress);
+        } else {
+            IERC20(underlyingToken).safeTransferFrom(
+                from,
+                pairAddress,
+                amount
+            );
+            return true;
+        }
+    }
+
+    /**
+     * @dev Pays WETH using ETH to a Uniswap V2 Pair to open a long option position.
+     */
+    function _payPremiumInETH(address pairAddress) internal returns(bool) {
+        // Deposit the ethers received from msg.value into the WETH contract.
+        weth.deposit.value(msg.value)();
+        // Transfer weth to pair to pay for premium
+        IERC20(address(weth)).safeTransfer(
+                pairAddress,
+                msg.value
+            );
+        return true;
+    }
+
+    /**
+     * @dev Pays out underlyingTokens for sold long option tokens. Pays out ETH if underlyingToken is WETH.
+     */
+    function _payoutPremium(address to, address underlyingToken, uint amount) internal returns (bool) {
+        if(underlyingToken == address(weth)) {
+           _withdrawEthAndSend(to, amount);
+           return true;
+        } else {
+            IERC20(underlyingToken).safeTransfer(to, amount);
+            return true;
+        }
+    }
+
 
     /**
      * @dev Deposits msg.value of ethers into WETH contract. Then sends WETH to "to".
@@ -1002,10 +1163,8 @@ contract PrimitiveRouter is
     function _withdrawEthAndSend(address to, uint256 quantity) internal {
         // Withdraw ethers with weth.
         weth.withdraw(quantity);
-
         // Send ether.
         (bool success, ) = to.call.value(quantity)("");
-
         // Revert is call is unsuccessful.
         require(success, "ERR_SENDING_ETHER");
     }
