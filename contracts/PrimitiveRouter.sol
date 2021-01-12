@@ -420,15 +420,11 @@ contract PrimitiveRouter is
     ) public override nonReentrant returns (bool) {
         address redeemToken = optionToken.redeemToken();
         address underlyingToken = optionToken.getUnderlyingTokenAddress();
-        address pairAddress = factory.getPair(redeemToken, underlyingToken);
+        IUniswapV2Pair pair = IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
 
         // Build the path to get the appropriate reserves to borrow from, and then pay back.
         // We are borrowing from reserve1 then paying it back mostly in reserve0.
         // Borrowing underlyingTokens, paying back in shortOptionTokens (normal swap). Pay any remainder in underlyingTokens.
-        address[] memory path = new address[](2);
-        path[0] = redeemToken;
-        path[1] = underlyingToken;
-        IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
 
         bytes4 selector =
             bytes4(
@@ -538,7 +534,7 @@ contract PrimitiveRouter is
         uint256 amountRedeems,
         uint256 minPayout
     ) public nonReentrant returns (bool) {
-       address redeemToken = optionToken.redeemToken();
+        address redeemToken = optionToken.redeemToken();
         address underlyingToken = optionToken.getUnderlyingTokenAddress();
         IUniswapV2Pair pair = IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
 
@@ -1074,8 +1070,7 @@ contract PrimitiveRouter is
         if (underlyingPayout > 0) {
             // Revert if minPayout is greater than the actual payout.
             require(underlyingPayout >= minPayout, "ERR_PREMIUM_UNDER_MIN");
-            bool success = _payoutPremium(to, underlyingToken, underlyingPayout);
-            require(success, "PrimitiveRouter: PAYOUT_FAIL");
+            IERC20(underlyingToken).safeTransfer(to, underlyingPayout);
         }
 
         emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
@@ -1085,35 +1080,30 @@ contract PrimitiveRouter is
     /**
     * @dev    Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
     * @notice IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
-    * @param pairAddress The address of the redeemToken<>underlyingToken UniswapV2Pair contract.
     * @param optionAddress The address of the longOptionTokes to close.
     * @param flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
     * @param minPayout The minimum payout of underlyingTokens sent to the `to` address.
-    * @param path underlyingTokens -> shortOptionTokens, because we are paying the input of underlyingTokens.
     * @param to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
      */
     function flashCloseLongOptionsThenSwapForETH(
-        address pairAddress,
         address optionAddress,
         uint256 flashLoanQuantity,
         uint256 minPayout,
-        address[] memory path,
         address to
     ) public returns (uint256, uint256) {
         require(msg.sender == address(this), "ERR_NOT_SELF");
         require(to != address(0x0), "ERR_TO_ADDRESS_ZERO");
         require(to != msg.sender, "ERR_TO_MSG_SENDER");
-        require(pairFor(path[0], path[1]) == pairAddress, "ERR_INVALID_PAIR");
+        address underlyingToken =
+            IOption(optionAddress).getUnderlyingTokenAddress();
+        address redeemToken = IOption(optionAddress).redeemToken();
+        address pairAddress = factory.getPair(underlyingToken, redeemToken);
 
         // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of redeemTokens.
         // We are flash swapping from an underlying <> shortOptionToken pair,
         // paying back a portion using underlyingTokens received from closing options.
         // In the flash open, we did redeemTokens to underlyingTokens.
         // In the flash close, we are doing underlyingTokens to redeemTokens and keeping the remainder.
-        address underlyingToken =
-            IOption(optionAddress).getUnderlyingTokenAddress();
-        address redeemToken = IOption(optionAddress).redeemToken();
-        require(path[1] == redeemToken, "ERR_END_PATH_NOT_REDEEM");
 
         // Close longOptionTokens using the redeemToken balance of this contract.
         IERC20(redeemToken).safeTransfer(optionAddress, flashLoanQuantity);
