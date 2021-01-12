@@ -31,7 +31,7 @@ interface IPrimitiveRouter {
         uint256 maxPremium,
         address[] calldata path,
         address to
-    ) external returns (uint256, uint256);
+    ) external payable returns (uint256, uint256);
 
     function openFlashLong(
         IOption optionToken,

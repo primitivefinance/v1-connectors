@@ -89,6 +89,10 @@ const getPremium = (quantityOptions, base, quote, redeemToken, underlyingToken, 
   return premium
 }
 
+const getBalance = async (signer, address) => {
+  return await (signer.provider).getBalance(address)
+}
+
 describe('PrimitiveRouter for WETH', () => {
   // ACCOUNTS
   let Admin, User, Alice
@@ -484,7 +488,7 @@ describe('PrimitiveRouter for WETH', () => {
     })
   })
 
-  describe('removeShortLiquidityThenCloseOptions()', () => {
+  describe('removeShortLiquidityThenCloseOptionsForETH()', () => {
     before(async () => {
       // Administrative contract instances
       registry = await setup.newRegistry(Admin)
@@ -542,7 +546,7 @@ describe('PrimitiveRouter for WETH', () => {
       let amountBMin = amount1
       let to = Alice
 
-      await primitiveRouter.removeShortLiquidityThenCloseOptions(
+      await primitiveRouter.removeShortLiquidityThenCloseOptionsForETH(
         optionAddress,
         liquidity,
         amountAMin,
@@ -564,14 +568,14 @@ describe('PrimitiveRouter for WETH', () => {
       let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
       let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
 
-      assertBNEqual(underlyingChange.toString(), amountAMin.mul(base).div(quote).add(amountBMin))
+      assertBNEqual(underlyingChange.toString(), '0')// check eth balance with this amt + gas: amountAMin.mul(base).div(quote).add(amountBMin))
       assertBNEqual(optionChange.toString(), amountAMin.mul(base).div(quote).mul(-1))
       assertBNEqual(quoteChange.toString(), '0')
       assert(redeemChange.gt(0) || redeemChange.isZero(), true, `Redeem change is not gt 0`)
     })
   })
 
-  describe('openFlashLong()', () => {
+  describe('openFlashLongWithETH()', () => {
     before(async () => {
       // Administrative contract instances
       registry = await setup.newRegistry(Admin)
@@ -624,7 +628,7 @@ describe('PrimitiveRouter for WETH', () => {
       let premium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       premium = premium.gt(0) ? premium : parseEther('0')
 
-      await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, premium))
+      await expect(primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, premium.add(10), {value: premium.add(10)}))
         .to.emit(primitiveRouter, 'FlashOpened')
         .withArgs(primitiveRouter.address, amountOptions, premium)
 
@@ -642,13 +646,14 @@ describe('PrimitiveRouter for WETH', () => {
       let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
 
       assert.equal(
-        underlyingChange.toString() <= amountOptions.mul(-1).add(premium),
+        parseFloat(underlyingChange.toString()) ===  0, // fix to check ether bal with this value amountOptions.mul(-1).add(premium),
         true,
         `${formatEther(underlyingChange)} ${formatEther(amountOptions)}`
       )
       assertBNEqual(optionChange.toString(), amountOptions)
       assertBNEqual(quoteChange.toString(), '0')
       assertBNEqual(redeemChange.toString(), '0')
+      assertBNEqual(await getBalance(Admin, primitiveRouter.address), '0')
     })
 
     it('should revert if actual premium is above max premium', async () => {
@@ -658,7 +663,7 @@ describe('PrimitiveRouter for WETH', () => {
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
       let maxPremium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       maxPremium = maxPremium.gt(0) ? maxPremium : parseEther('0')
-      await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, maxPremium.sub(1))).to.be.revertedWith(
+      await expect(primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, maxPremium.sub(1), {value: maxPremium.sub(1)})).to.be.revertedWith(
         'ERR_UNISWAPV2_CALL_FAIL'
       )
     })
@@ -688,7 +693,7 @@ describe('PrimitiveRouter for WETH', () => {
       let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
 
       await expect(
-        primitiveRouter.openFlashLong(optionToken.address, amountOptions, amountOutMin.add(1))
+        primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, amountOutMin.add(1), {value: amountOutMin.add(1)})
       ).to.be.revertedWith('INSUFFICIENT_OUTPUT_AMOUNT')
     })
   })

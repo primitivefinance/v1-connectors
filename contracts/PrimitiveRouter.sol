@@ -393,6 +393,7 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 minPayout
     ) external payable returns (bool) {
+        require(optionToken.getUnderlyingTokenAddress() == address(weth), "PrimitiveV1: NOT_WETH");
         // Mints WETH options uses an ether balance `msg.value`.
         (, uint256 outputRedeems) =
             safeMintWithETH(optionToken, msg.sender);
@@ -468,11 +469,12 @@ contract PrimitiveRouter is
      * @param amountOptions The quantity of longOptionTokens to purchase.
      * @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
      */
-    function openFlashLongETH(
+    function openFlashLongWithETH(
         IOption optionToken,
         uint256 amountOptions,
         uint256 maxPremium
-    ) external payable nonZero(msg.value) nonReentrant returns (bool) {
+    ) external payable nonZero(msg.value) returns (bool) {
+        require(maxPremium == msg.value, "PrimitiveV1: ERR_ETH_PREMIUM"); // must assert because cannot check in callback
         return openFlashLong(optionToken, amountOptions, maxPremium);
     }
 
@@ -729,7 +731,7 @@ contract PrimitiveRouter is
         uint256 amountBMin,
         address to,
         uint256 deadline
-    ) external override nonReentrant returns (uint256, uint256) {
+    ) public override nonReentrant returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         address redeemToken = optionToken.redeemToken();
         address underlyingTokenAddress =
@@ -785,7 +787,7 @@ contract PrimitiveRouter is
 
         // Pull the required longOptionTokens from `msg.sender` to this contract.
         IERC20(address(optionToken)).safeTransferFrom(
-            to_,
+            msg.sender,
             address(optionToken),
             requiredLongOptions
         );
@@ -817,6 +819,40 @@ contract PrimitiveRouter is
         );
     }
 
+    /**
+     * @dev    Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
+     * @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
+     *         Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
+     *         Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
+     *         UNI-V2 -> optionToken -> underlyingToken.
+     * @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
+     * @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
+     * @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
+     * @param amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
+     * @param to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
+     * @param deadline The timestamp to expire a pending transaction.
+     */
+    function removeShortLiquidityThenCloseOptionsForETH(
+        address optionAddress,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256, uint256) {
+        (uint totalUnderlying, uint totalRedeem) = removeShortLiquidityThenCloseOptions(
+            optionAddress,
+            liquidity,
+            amountAMin,
+            amountBMin,
+            address(this),
+            deadline
+        );
+        _withdrawEthAndSend(to, totalUnderlying);
+        _moveToken(IOption(optionAddress).redeemToken(), address(this), to, totalRedeem);
+        return (totalUnderlying, totalRedeem);
+    }
+
     // ==== Flash Functions ====
 
     /**
@@ -842,7 +878,7 @@ contract PrimitiveRouter is
         uint256 maxPremium,
         address[] memory path,
         address to
-    ) public override returns (uint256, uint256) {
+    ) public payable override returns (uint256, uint256) {
         require(msg.sender == address(this), "ERR_NOT_SELF");
         require(to != address(0x0), "ERR_TO_ADDRESS_ZERO");
         require(to != msg.sender, "ERR_TO_MSG_SENDER");
@@ -896,6 +932,12 @@ contract PrimitiveRouter is
             // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
             require(maxPremium >= loanRemainder, "ERR_PREMIUM_OVER_MAX"); // check for users to not pay over their max desired value.
             _payPremium(to, underlyingToken, pairAddress_, loanRemainder);
+            if(maxPremium > loanRemainder) {
+                // Send ether.
+                (bool success, ) = to.call.value(maxPremium.sub(loanRemainder))("");
+                // Revert is call is unsuccessful.
+                require(success, "ERR_SENDING_ETHER");
+            }
         }
 
         // If negativePremiumAmount is non-zero and non-negative, send redeemTokens to the `to` address.
@@ -1035,7 +1077,7 @@ contract PrimitiveRouter is
      */
     function _payPremium(address from, address underlyingToken, address pairAddress, uint amount) internal returns (bool) {
         if(underlyingToken == address(weth)) {
-            return _payPremiumInETH(pairAddress);
+            return _payPremiumInETH(pairAddress, amount);
         } else {
             IERC20(underlyingToken).safeTransferFrom(
                 from,
@@ -1049,14 +1091,13 @@ contract PrimitiveRouter is
     /**
      * @dev Pays WETH using ETH to a Uniswap V2 Pair to open a long option position.
      */
-    function _payPremiumInETH(address pairAddress) internal returns(bool) {
+    function _payPremiumInETH(address pairAddress, uint amount) internal returns(bool) {
         // Deposit the ethers received from msg.value into the WETH contract.
-        console.log(msg.value);
-        weth.deposit.value(msg.value)();
+        weth.deposit.value(amount)();
         // Transfer weth to pair to pay for premium
         IERC20(address(weth)).safeTransfer(
                 pairAddress,
-                msg.value
+                amount
             );
         return true;
     }
