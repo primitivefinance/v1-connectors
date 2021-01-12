@@ -15,23 +15,19 @@ import {
 interface IPrimitiveRouter {
     // ==== Flash Functions ====
 
-    function flashCloseLongOptionsThenSwap(
-        address pairAddress,
-        address optionAddress,
-        uint256 flashLoanQuantity,
-        uint256 minPayout,
-        address[] calldata path,
-        address to
-    ) external returns (uint256, uint256);
-
     function flashMintShortOptionsThenSwap(
-        address pairAddress,
         address optionAddress,
         uint256 flashLoanQuantity,
         uint256 maxPremium,
-        address[] calldata path,
         address to
     ) external payable returns (uint256, uint256);
+
+    function flashCloseLongOptionsThenSwap(
+        address optionAddress,
+        uint256 flashLoanQuantity,
+        uint256 minPayout,
+        address to
+    ) external returns (uint256, uint256);
 
     function openFlashLong(
         IOption optionToken,

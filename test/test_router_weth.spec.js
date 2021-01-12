@@ -671,7 +671,7 @@ describe('PrimitiveRouter for WETH', () => {
     it('should do a normal flash close', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '1')).to.emit(
+      await expect(primitiveRouter.closeFlashLongForETH(optionToken.address, amountRedeems, '1')).to.emit(
         primitiveRouter,
         'FlashClosed'
       )
@@ -680,7 +680,7 @@ describe('PrimitiveRouter for WETH', () => {
     it('should revert with premium over max', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, amountRedeems)).to.be.revertedWith(
+      await expect(primitiveRouter.closeFlashLongForETH(optionToken.address, amountRedeems, amountRedeems)).to.be.revertedWith(
         'ERR_UNISWAPV2_CALL_FAIL'
       )
     })
@@ -698,7 +698,7 @@ describe('PrimitiveRouter for WETH', () => {
     })
   })
 
-  describe('closeFlashLong()', () => {
+  describe('closeFlashLongForETH()', () => {
     before(async () => {
       // Administrative contract instances
       registry = await setup.newRegistry(Admin)
@@ -745,7 +745,7 @@ describe('PrimitiveRouter for WETH', () => {
     it('should revert on flash close because it would cost the user a negative payout', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '1')).to.be.revertedWith(
+      await expect(primitiveRouter.closeFlashLongForETH(optionToken.address, amountRedeems, '1')).to.be.revertedWith(
         'ERR_UNISWAPV2_CALL_FAIL'
       )
     })
@@ -758,7 +758,7 @@ describe('PrimitiveRouter for WETH', () => {
       let optionBalanceBefore = await optionToken.balanceOf(Alice)
 
       let amountRedeems = parseEther('0.01')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '0')).to.emit(
+      await expect(primitiveRouter.closeFlashLongForETH(optionToken.address, amountRedeems, '0')).to.emit(
         primitiveRouter,
         'FlashClosed'
       )
