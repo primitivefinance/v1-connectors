@@ -103,6 +103,9 @@ describe('PrimitiveRouter', () => {
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
   assertInvariant = async () => {
+    if(typeof optionToken === 'undefined') {
+      return;
+    }
     assertBNEqual(await optionToken.balanceOf(primitiveRouter.address), '0')
     assertBNEqual(await redeemToken.balanceOf(primitiveRouter.address), '0')
     assertBNEqual(await teth.balanceOf(primitiveRouter.address), '0')
@@ -534,7 +537,7 @@ describe('PrimitiveRouter', () => {
       let optionAddress = optionToken.address
       let liquidity = parseEther('0.1')
       let path = [redeemToken.address, teth.address]
-      let pairAddress = await primitiveRouter.pairFor(path[0], path[1])
+      let pairAddress = await uniswapFactory.getPair(path[0], path[1])
       let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
       await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
       assert.equal((await pair.balanceOf(Alice)) >= liquidity, true, 'err not enough pair tokens')

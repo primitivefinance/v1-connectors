@@ -8,6 +8,7 @@ const constants = require('./lib/constants')
 const { parseEther, formatEther } = require('ethers/lib/utils')
 const { assertBNEqual } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
+const { ERC20_TRANSFER_AMOUNT }= constants.ERR_CODES
 const UniswapV2Pair = require('@uniswap/v2-core/build/UniswapV2Pair.json')
 const batchApproval = require('./lib/batchApproval')
 const { sortTokens } = require('./lib/utils')
@@ -310,6 +311,187 @@ describe('PrimitiveRouter for WETH', () => {
       let minPayout = '1'
 
       await expect(primitiveRouter.mintETHOptionsThenFlashCloseLong(optionTokenAddress, minPayout, {value: optionsToMint})).to.be
+        .reverted
+    })
+  })
+
+  describe('mintOptionsThenFlashCloseLongForETH()', () => {
+    before(async () => {
+      // Administrative contract instances
+      registry = await setup.newRegistry(Admin)
+      // Option and redeem instances
+      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
+      optionToken = Primitive.optionToken
+      redeemToken = Primitive.redeemToken
+
+      // Approve all tokens and contracts
+      await batchApproval(
+        [primitiveRouter.address, uniswapRouter.address],
+        [optionToken, redeemToken],
+        [Admin]
+      )
+
+      premium = 10
+
+      // Create UNISWAP PAIRS
+      const ratio = 1050
+      const totalOptions = parseEther('20')
+      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
+      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions.add(parseEther('10'))})
+
+      // Add liquidity to redeem <> weth pair
+      await uniswapRouter.addLiquidityETH(
+        redeemToken.address,
+        totalRedeemForPair,
+        0,
+        0,
+        Alice,
+        deadline
+      , {value: totalOptions})
+    })
+
+    it('should mint Primitive V1 Options then flashCloseLong the long option tokens', async () => {
+      // Get the affected balances before the operation.
+      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
+      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('0.1')
+      let amountIn = optionsToMint.mul(quote).div(base)
+      let minPayout = await primitiveRouter.getClosePremium(optionTokenAddress, amountIn)
+
+      // Call the function
+      // transfersFrom underlyingToken `optionsToMint` amount to mint options. Then swaps in unsiwap pair
+      // for underlying tokens.
+      // change = (-optionsToMint + amoutOutMin)
+      await weth.deposit({value: optionsToMint})
+      await expect(primitiveRouter.mintOptionsThenFlashCloseLongForETH(optionTokenAddress, optionsToMint, minPayout[0]))
+        .to.emit(primitiveRouter, 'WroteOption')
+        .withArgs(Alice, optionsToMint)
+
+      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
+      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
+
+      // Used underlyings to mint options (Alice)
+      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore).toString()
+      // Sold options for quoteTokens to the pair, pair has more options (Pair)
+      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore).toString()
+
+      assertBNEqual(redeemChange, amountIn)
+      assert.equal(
+        parseFloat(underlyingChange) === 0,// should fix with checking eth balminPayout[0].add(optionsToMint.mul(-1)),
+        true,
+        `underlyingDelta ${formatEther(underlyingChange)} != minPayout ${formatEther(minPayout[0])}`
+      )
+      assertBNEqual(await optionToken.balanceOf(primitiveRouter.address), '0')
+    })
+
+    it('should revert if quantity is zero', async () => {
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('0')
+      let amountOutMin = parseEther('0')
+
+      // Call the function
+      await expect(
+        primitiveRouter.mintOptionsThenFlashCloseLongForETH(optionTokenAddress, optionsToMint, amountOutMin)
+      ).to.be.revertedWith('ERR_ZERO')
+    })
+
+    it('should revert if quantity is minPayout is not zero and theres a negative premium', async () => {
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('1')
+      let minPayout = '1'
+
+      await expect(primitiveRouter.mintOptionsThenFlashCloseLongForETH(optionTokenAddress, optionsToMint, minPayout)).to.be
+        .reverted
+    })
+  })
+
+  describe('mintETHOptionsThenFlashCloseLongForETH()', () => {
+    before(async () => {
+      // Administrative contract instances
+      registry = await setup.newRegistry(Admin)
+      // Option and redeem instances
+      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
+      optionToken = Primitive.optionToken
+      redeemToken = Primitive.redeemToken
+
+      // Approve all tokens and contracts
+      await batchApproval(
+        [primitiveRouter.address, uniswapRouter.address],
+        [optionToken, redeemToken],
+        [Admin]
+      )
+
+      premium = 10
+
+      // Create UNISWAP PAIRS
+      const ratio = 1050
+      const totalOptions = parseEther('20')
+      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
+      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions.add(parseEther('10'))})
+
+      // Add liquidity to redeem <> weth pair
+      await uniswapRouter.addLiquidityETH(
+        redeemToken.address,
+        totalRedeemForPair,
+        0,
+        0,
+        Alice,
+        deadline
+      , {value: totalOptions})
+    })
+
+    it('should mint Primitive V1 Options then flashCloseLong the long option tokens', async () => {
+      // Get the affected balances before the operation.
+      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
+      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('0.1')
+      let amountIn = optionsToMint.mul(quote).div(base)
+      let minPayout = await primitiveRouter.getClosePremium(optionTokenAddress, amountIn)
+
+      // Call the function
+      // transfersFrom underlyingToken `optionsToMint` amount to mint options. Then swaps in unsiwap pair
+      // for underlying tokens.
+      // change = (-optionsToMint + amoutOutMin)
+      await expect(primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, minPayout[0], {value: optionsToMint}))
+        .to.emit(primitiveRouter, 'WroteOption')
+        .withArgs(Alice, optionsToMint)
+
+      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
+      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
+
+      // Used underlyings to mint options (Alice)
+      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore).toString()
+      // Sold options for quoteTokens to the pair, pair has more options (Pair)
+      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore).toString()
+
+      assertBNEqual(redeemChange, amountIn)
+      assert.equal(
+        parseFloat(underlyingChange) === 0,// should fix with checking eth balminPayout[0].add(optionsToMint.mul(-1)),
+        true,
+        `underlyingDelta ${formatEther(underlyingChange)} != minPayout ${formatEther(minPayout[0])}`
+      )
+      assertBNEqual(await optionToken.balanceOf(primitiveRouter.address), '0')
+    })
+
+    it('should revert if quantity is zero', async () => {
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('0')
+      let amountOutMin = parseEther('0')
+
+      // Call the function
+      await expect(
+        primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, amountOutMin, {value: optionsToMint})
+      ).to.be.revertedWith('ERR_ZERO')
+    })
+
+    it('should revert if quantity is minPayout is not zero and theres a negative premium', async () => {
+      let optionTokenAddress = optionToken.address
+      let optionsToMint = parseEther('1')
+      let minPayout = '1'
+
+      await expect(primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, minPayout, {value: optionsToMint})).to.be
         .reverted
     })
   })

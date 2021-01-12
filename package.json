@@ -13,7 +13,6 @@
   ],
   "scripts": {
     "test": "cross-env hardhat test",
-    "test:uni": "cross-env hardhat test ./test/test_uni_connector.spec.js",
     "test:router": "cross-env hardhat test ./test/test_router.spec.js",
     "test:router-weth": "cross-env hardhat test ./test/test_router_weth.spec.js",
     "test:router-eth": "cross-env hardhat test ./test/test_eth_abstraction.spec.js",

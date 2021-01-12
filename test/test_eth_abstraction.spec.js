@@ -15,7 +15,7 @@ const { assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 
 const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = constants.VALUES
 
-const { ERR_ZERO, ERR_BAL_STRIKE, ERR_BAL_OPTIONS, ERR_BAL_REDEEM, ERR_NOT_EXPIRED } = constants.ERR_CODES
+const { ERR_ZERO, ERR_BAL_STRIKE, ERR_NOT_EXPIRED, ERC20_TRANSFER_AMOUNT } = constants.ERR_CODES
 
 describe('PrimitiveRouter: Eth Abstraction', () => {
   // Accounts
@@ -194,7 +194,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
 
     it('should revert if user does not have enough optionToken tokens', async () => {
       // Fails early by checking the user's optionToken balance against the quantity of options they wish to exercise.
-      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERR_BAL_OPTIONS)
+      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
     })
 
     it('should revert if user does not have enough strike tokens', async () => {
@@ -207,7 +207,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await strikeToken.connect(User).transfer(Alice, await strikeToken.balanceOf(Bob))
       // Attempting to exercise an option without having enough strikeTokens will cause a revert.
       await expect(primitiveRouter.connect(User).safeExerciseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
-        ERR_BAL_STRIKE
+        ERC20_TRANSFER_AMOUNT
       )
     })
 
@@ -264,7 +264,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
 
       // Attempting to close options without enough redeemTokens will cause a revert.
       await expect(primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
-        ERR_BAL_REDEEM
+        ERC20_TRANSFER_AMOUNT
       )
     })
 
@@ -279,7 +279,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
 
       // Attempting to close a quantity of options that msg.sender does not have will cause a revert.
       await expect(primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
-        ERR_BAL_OPTIONS
+        ERC20_TRANSFER_AMOUNT
       )
     })
 
@@ -382,7 +382,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
 
     it('should revert if user does not have enough redeemToken tokens', async () => {
       // Fails early if the user is attempting to redeem tokens that they don't have.
-      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERR_BAL_REDEEM)
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
     })
 
     it('should revert if contract does not have enough strike tokens', async () => {
