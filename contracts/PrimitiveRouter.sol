@@ -54,7 +54,6 @@ contract PrimitiveRouter is
     event Exercised(address indexed from, address indexed optionToken, uint quantity);
     event Redeemed(address indexed from, address indexed optionToken, uint quantity);
     event Closed(address indexed from, address indexed optionToken, uint quantity);
-    event Unwound(address indexed from, address indexed optionToken, uint quantity);
 
     /// @dev Checks the quantity of an operation to make sure its not zero. Fails early.
     modifier nonZero(uint256 quantity) {
@@ -87,11 +86,7 @@ contract PrimitiveRouter is
         uint256 mintQuantity,
         address receiver
     ) public nonZero(mintQuantity) returns (uint256, uint256) {
-        IERC20(optionToken.getUnderlyingTokenAddress()).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            mintQuantity
-        );
+        _moveToken(optionToken.getUnderlyingTokenAddress(), msg.sender, address(optionToken), mintQuantity);
         emit Minted(msg.sender, address(optionToken), mintQuantity, getProportionalShortOptions(optionToken, mintQuantity));
         return optionToken.mintOptions(receiver);
     }
@@ -108,30 +103,12 @@ contract PrimitiveRouter is
         uint256 exerciseQuantity,
         address receiver
     ) public nonZero(exerciseQuantity) returns (uint256, uint256) {
-        require(
-            IERC20(address(optionToken)).balanceOf(msg.sender) >=
-                exerciseQuantity,
-            "ERR_BAL_OPTIONS"
-        );
-
         // Calculate quantity of strikeTokens needed to exercise quantity of optionTokens.
         address strikeToken = optionToken.getStrikeTokenAddress();
         uint256 inputStrikes =
             getProportionalShortOptions(optionToken, exerciseQuantity);
-        require(
-            IERC20(strikeToken).balanceOf(msg.sender) >= inputStrikes,
-            "ERR_BAL_STRIKE"
-        );
-        IERC20(strikeToken).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputStrikes
-        );
-        IERC20(address(optionToken)).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            exerciseQuantity
-        );
+        _moveToken(address(optionToken), msg.sender, address(optionToken), exerciseQuantity);
+        _moveToken(strikeToken, msg.sender, address(optionToken), inputStrikes);
         emit Exercised(msg.sender, address(optionToken), exerciseQuantity);
         return
             optionToken.exerciseOptions(
@@ -153,17 +130,7 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public nonZero(redeemQuantity) returns (uint256) {
-        address redeemToken = optionToken.redeemToken();
-        require(
-            IERC20(redeemToken).balanceOf(msg.sender) >= redeemQuantity,
-            "ERR_BAL_REDEEM"
-        );
-        // There can be the case there is no available strikes to redeem, causing a revert.
-        IERC20(redeemToken).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            redeemQuantity
-        );
+        _moveToken(optionToken.redeemToken(), msg.sender, address(optionToken), redeemQuantity);
         emit Redeemed(msg.sender, address(optionToken), redeemQuantity);
         return optionToken.redeemStrikeTokens(receiver);
     }
@@ -190,29 +157,11 @@ contract PrimitiveRouter is
             uint256
         )
     {
-        require(
-            IERC20(address(optionToken)).balanceOf(msg.sender) >= closeQuantity,
-            "ERR_BAL_OPTIONS"
-        );
-
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
         uint256 inputRedeems =
             getProportionalShortOptions(optionToken, closeQuantity);
-        address redeemToken = optionToken.redeemToken();
-        require(
-            IERC20(redeemToken).balanceOf(msg.sender) >= inputRedeems,
-            "ERR_BAL_REDEEM"
-        );
-        IERC20(redeemToken).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputRedeems
-        );
-        IERC20(address(optionToken)).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            closeQuantity
-        );
+        _moveToken(optionToken.redeemToken(), msg.sender, address(optionToken), inputRedeems);
+        if(optionToken.getExpiryTime() >= now) _moveToken(address(optionToken), msg.sender, address(optionToken), closeQuantity);
         emit Closed(msg.sender, address(optionToken), closeQuantity);
         return optionToken.closeOptions(receiver);
     }
@@ -296,21 +245,9 @@ contract PrimitiveRouter is
         uint256 inputOptions =
             getProportionalLongOptions(optionToken, inputStrikes);
 
-        // Fail early if msg.sender does not have enough optionTokens to burn.
-        require(
-            IERC20(address(optionToken)).balanceOf(msg.sender) >= inputOptions,
-            "ERR_BAL_OPTIONS"
-        );
-
         // Wrap the ethers into WETH, and send the WETH to the option contract to prepare for calling exerciseOptions().
         _depositEthSendWeth(address(optionToken));
-
-        // Send the option tokens required to prepare for calling exerciseOptions().
-        IERC20(address(optionToken)).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputOptions
-        );
+        _moveToken(address(optionToken), msg.sender, address(optionToken), inputOptions);
 
         // Burns the transferred option tokens, stores the strike asset (ether), and pushes underlyingTokens
         // to the receiver address.
@@ -393,73 +330,6 @@ contract PrimitiveRouter is
 
         // Since underlyngTokens are WETH, unwrap them then send the ethers to the receiver.
         _withdrawEthAndSend(receiver, closeQuantity);
-        return (inputRedeems, inputOptions, outUnderlyings);
-    }
-
-    ///
-    /// @dev Burn redeemTokens to withdraw underlyingTokens (ethers) from expired options.
-    /// This function is for options with WETH as the underlying asset.
-    /// The underlyingTokens are WETH, which are converted to ethers prior to being sent to receiver.
-    /// @param optionToken The address of the option contract.
-    /// @param unwindQuantity Quantity of underlyingTokens (ethers) to withdraw.
-    /// @param receiver The underlyingTokens (ethers) are sent to the receiver address.
-    ///
-    function safeUnwindForETH(
-        IOption optionToken,
-        uint256 unwindQuantity,
-        address receiver
-    )
-        external
-        nonReentrant
-        nonZero(unwindQuantity)
-        returns (
-            uint256,
-            uint256,
-            uint256
-        )
-    {
-        // Require the optionToken to have WETH as the underlying asset.
-        address underlyingAddress = optionToken.getUnderlyingTokenAddress();
-        require(address(weth) == underlyingAddress, "ERR_NOT_WETH");
-
-        // If the option is not expired, fail early.
-        // solhint-disable-next-line not-rely-on-time
-        require(optionToken.getExpiryTime() < now, "ERR_NOT_EXPIRED");
-
-        // Calculate the quantity of redeemTokens that need to be burned.
-        uint256 inputRedeems = unwindQuantity
-            .mul(optionToken.getQuoteValue())
-            .div(optionToken.getBaseValue());
-
-        // Fail early if msg.sender does not have enough redeemTokens to burn.
-        require(
-            IERC20(optionToken.redeemToken()).balanceOf(msg.sender) >=
-                inputRedeems,
-            "ERR_BAL_REDEEM"
-        );
-
-        // Send redeem in preparation of calling closeOptions().
-        IERC20(optionToken.redeemToken()).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputRedeems
-        );
-
-        // Call the closeOptions() function to burn redeem tokens and withdraw underlyingTokens.
-        uint256 inputOptions;
-        uint256 outUnderlyings;
-        (inputRedeems, inputOptions, outUnderlyings) = optionToken.closeOptions(
-            address(this)
-        );
-
-        // Since underlyngTokens are WETH, unwrap them to ethers then send the ethers to the receiver.
-        _withdrawEthAndSend(receiver, unwindQuantity);
-
-        emit Unwound(
-            msg.sender,
-            address(optionToken),
-            inputOptions
-        );
         return (inputRedeems, inputOptions, outUnderlyings);
     }
 
@@ -1117,6 +987,21 @@ contract PrimitiveRouter is
         emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
         return (outputUnderlyings, underlyingPayout);
     }
+
+    // ==== Token Operations ====
+
+    function _moveToken(address token, address from, address to, uint quantity) internal returns (bool) {
+        require(IERC20(token).balanceOf(from) >= quantity, "PrimitiveV1: ERR_BAL_TOKENS"); // fail early
+        IERC20(token).safeTransferFrom(from, to, quantity);
+        return true;
+    }
+
+    /* function _moveTokenWithPermit(address token, address from, address to, uint quantity, uint deadline, uint8 v, bytes32 r, bytes32 s) internal returns (bool) {
+        require(IERC20(token).balanceOf(from) >= quantity, "PrimitiveV1: ERR_BAL_TOKENS"); // fail early
+        IERC20(token).permit(from, address(this), quantity, deadline, v, r, s);
+        IERC20(token).safeTransferFrom(from, to, quantity);
+        return true;
+    } */
 
     // ==== WETH Operations ====
 

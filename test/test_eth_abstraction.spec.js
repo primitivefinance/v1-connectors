@@ -17,7 +17,7 @@ const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = cons
 
 const { ERR_ZERO, ERR_BAL_STRIKE, ERR_BAL_OPTIONS, ERR_BAL_REDEEM, ERR_NOT_EXPIRED } = constants.ERR_CODES
 
-describe('WethConnector', () => {
+describe('PrimitiveRouter: Eth Abstraction', () => {
   // Accounts
   let Admin, User, Alice, Bob
 
@@ -70,6 +70,10 @@ describe('WethConnector', () => {
     await strikeToken.approve(primitiveRouter.address, MILLION_ETHER)
     await optionToken.approve(primitiveRouter.address, MILLION_ETHER)
     await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
+    await underlyingToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
+    await strikeToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
+    await optionToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
+    await redeemToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
   })
 
   describe('Constructor', () => {
@@ -201,7 +205,6 @@ describe('WethConnector', () => {
 
       // Send the strikeTokens that Bob owns to Alice, so that Bob has 0 strikeTokens.
       await strikeToken.connect(User).transfer(Alice, await strikeToken.balanceOf(Bob))
-
       // Attempting to exercise an option without having enough strikeTokens will cause a revert.
       await expect(primitiveRouter.connect(User).safeExerciseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
         ERR_BAL_STRIKE
@@ -280,13 +283,6 @@ describe('WethConnector', () => {
       )
     })
 
-    it('should revert if calling unwind and not expired', async () => {
-      // The unwind function is for using redeem tokens to withdraw underlying collateral from expired options.
-      await expect(primitiveRouter.safeUnwindForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(
-        ERR_NOT_EXPIRED
-      )
-    })
-
     it('should close consecutively', async () => {
       await safeMintWithETH(parseEther('1'))
       await safeCloseForETH(parseEther('0.1'))
@@ -324,93 +320,6 @@ describe('WethConnector', () => {
       let optionBal = await optionToken.balanceOf(Alice)
 
       assertWithinError(optionBal, 0)
-    })
-  })
-
-  describe('safeUnwindForETH', () => {
-    beforeEach(async () => {
-      // Deploy a new primitiveRouter instance
-      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
-
-      // Creates a new option and redeem to test with. These Test instances can be set to expired arbritrarily.
-      optionToken = await setup.newTestOption(Admin, underlyingToken.address, strikeToken.address, base, quote, expiry)
-
-      redeemToken = await setup.newTestRedeem(Admin, Alice, optionToken.address)
-
-      await optionToken.setRedeemToken(redeemToken.address)
-
-      // Approve tokens for two signer accounts
-      await underlyingToken.approve(primitiveRouter.address, MILLION_ETHER)
-      await strikeToken.approve(primitiveRouter.address, MILLION_ETHER)
-      await optionToken.approve(primitiveRouter.address, MILLION_ETHER)
-      await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
-
-      await underlyingToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
-      await strikeToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
-      await optionToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
-      await redeemToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
-
-      // Setup initial state and make the option expired
-      let inputUnderlyings = parseEther('0.5')
-
-      // Mint underlying tokens so we can use them to mint options
-      await underlyingToken.deposit({ value: inputUnderlyings })
-      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, {
-        value: inputUnderlyings,
-      })
-      // Do the same for the other signer account
-      await underlyingToken.deposit({ value: parseEther('0.1') })
-      await primitiveRouter.connect(User).safeMintWithETH(optionToken.address, Bob, {
-        value: parseEther('0.1'),
-      })
-
-      // Expire the option and check to make sure it has the expired timestamp as a parameter
-      let expired = '1589386232'
-      await optionToken.setExpiry(expired)
-      assert.equal(await optionToken.getExpiryTime(), expired)
-    })
-
-    safeUnwindForETH = async (inputOptions) => {
-      let inputRedeems = inputOptions.mul(quote).div(base)
-
-      // The balance of the user we are checking before and after is their ether balance.
-      let underlyingBal = await Admin.getBalance()
-      let optionBal = await getTokenBalance(optionToken, Alice)
-      let redeemBal = await getTokenBalance(redeemToken, Alice)
-
-      await expect(primitiveRouter.safeUnwindForETH(optionToken.address, inputOptions, Alice))
-        .to.emit(primitiveRouter, 'Unwound')
-        .withArgs(Alice, optionToken.address, inputOptions.toString())
-
-      let underlyingsChange = (await Admin.getBalance()).sub(underlyingBal)
-      let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-      let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
-
-      assertWithinError(underlyingsChange, inputOptions)
-      assertWithinError(optionsChange, 0)
-      assertWithinError(redeemsChange, inputRedeems.mul(-1))
-    }
-
-    it('should revert if amount is 0', async () => {
-      // Fails early if quantity input is 0, due to the contract's nonZero modifier.
-      await expect(primitiveRouter.safeUnwindForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
-    })
-
-    it('should revert if user does not have enough redeemToken tokens', async () => {
-      // Transfer Alice's redeemTokens to Bob, so that Alice has 0 redeemTokens.
-      await redeemToken.transfer(Bob, await redeemToken.balanceOf(Alice))
-
-      // Attempting to redeem tokens which are not held in msg.sender's balance will cause a revert.
-      await expect(
-        primitiveRouter.safeUnwindForETH(optionToken.address, parseEther('0.1'), Alice, {
-          from: Alice,
-        })
-      ).to.be.revertedWith(ERR_BAL_REDEEM)
-    })
-
-    it('should unwind consecutively', async () => {
-      await safeUnwindForETH(parseEther('0.2351'))
-      await safeUnwindForETH(parseEther('0.1'))
     })
   })
 
@@ -480,7 +389,7 @@ describe('WethConnector', () => {
       // If option tokens are not exercised, then no strikeTokens are stored in the option contract.
       // If no strikeTokens are stored in the contract, redeemTokens cannot be utilized until:
       // options are exercised, or become expired.
-      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(ERR_BAL_STRIKE)
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith("ERR_BAL_STRIKE")
     })
 
     it('should redeemToken consecutively', async () => {
