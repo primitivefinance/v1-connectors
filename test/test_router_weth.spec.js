@@ -591,12 +591,12 @@ describe('PrimitiveRouter for WETH', () => {
 
       // Create UNISWAP PAIRS
       const ratio = 1050
-      /* const totalOptions = parseEther('20')
-      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000) */
-      const totalOptions = '75716450507480110972130'
-      const totalRedeemForPair = '286685334476675940449501'
+      const totalOptions = parseEther('20')
+      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
+      /* const totalOptions = '75716450507480110972130'
+      const totalRedeemForPair = '286685334476675940449501' */
       await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions})
-      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: parseEther('100000')})
+      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: parseEther('1000')})
 
       // Add liquidity to redeem <> weth pair
       await uniswapRouter.addLiquidityETH(

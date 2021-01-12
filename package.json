@@ -16,6 +16,7 @@
     "test:uni": "cross-env hardhat test ./test/test_uni_connector.spec.js",
     "test:router": "cross-env hardhat test ./test/test_router.spec.js",
     "test:router-weth": "cross-env hardhat test ./test/test_router_weth.spec.js",
+    "test:router-eth": "cross-env hardhat test ./test/test_weth_connector.spec.js",
     "coverage": "cross-env hardhat coverage --network coverage",
     "coverage:uni": "cross-env hardhat coverage --network coverage --testfiles 'test/test_uni_connector.spec.js'",
     "task:clean": "hardhat clean",

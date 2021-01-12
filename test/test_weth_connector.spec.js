@@ -28,7 +28,7 @@ describe('WethConnector', () => {
   let underlyingToken, strikeToken, base, quote, expiry
 
   // Periphery and Administrative contracts
-  let registry, trader
+  let registry, primitiveRouter
 
   before(async () => {
     let signers = await setup.newWallets()
@@ -63,18 +63,18 @@ describe('WethConnector', () => {
     redeemToken = Primitive.redeemToken
 
     // Trader contract instance
-    trader = await setup.newWethConnector(Admin, weth.address)
+    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
 
-    // Approve tokens for trader to use
-    await underlyingToken.approve(trader.address, MILLION_ETHER)
-    await strikeToken.approve(trader.address, MILLION_ETHER)
-    await optionToken.approve(trader.address, MILLION_ETHER)
-    await redeemToken.approve(trader.address, MILLION_ETHER)
+    // Approve tokens for primitiveRouter to use
+    await underlyingToken.approve(primitiveRouter.address, MILLION_ETHER)
+    await strikeToken.approve(primitiveRouter.address, MILLION_ETHER)
+    await optionToken.approve(primitiveRouter.address, MILLION_ETHER)
+    await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
   })
 
   describe('Constructor', () => {
     it('should return the correct weth address', async () => {
-      expect(await trader.weth()).to.be.equal(weth.address)
+      expect(await primitiveRouter.weth()).to.be.equal(weth.address)
     })
   })
 
@@ -90,18 +90,18 @@ describe('WethConnector', () => {
 
       // Since the user is sending ethers, the change in their balance will need to incorporate gas costs.
       let gasUsed = await Admin.estimateGas(
-        trader.safeMintWithETH(optionToken.address, Alice, {
+        primitiveRouter.safeMintWithETH(optionToken.address, Alice, {
           value: inputUnderlyings,
         })
       )
 
       // Call the mint function and check that the event was emitted.
       await expect(
-        trader.safeMintWithETH(optionToken.address, Alice, {
+        primitiveRouter.safeMintWithETH(optionToken.address, Alice, {
           value: inputUnderlyings,
         })
       )
-        .to.emit(trader, 'WethConnectorMint')
+        .to.emit(primitiveRouter, 'Minted')
         .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), outputRedeems.toString())
 
       let underlyingsChange = (await Admin.getBalance()).sub(underlyingBal).add(gasUsed)
@@ -117,23 +117,23 @@ describe('WethConnector', () => {
 
     it('should revert if amount is 0', async () => {
       // Without sending any value, the transaction will revert due to the contract's nonZero modifier.
-      await expect(trader.safeMintWithETH(optionToken.address, Alice)).to.be.revertedWith(ERR_ZERO)
+      await expect(primitiveRouter.safeMintWithETH(optionToken.address, Alice)).to.be.revertedWith(ERR_ZERO)
     })
 
     it('should revert if optionToken.address is not an option ', async () => {
       // Passing in the address of Alice for the optionToken parameter will revert.
-      await expect(trader.safeMintWithETH(Alice, Alice, { value: 10 })).to.be.reverted
+      await expect(primitiveRouter.safeMintWithETH(Alice, Alice, { value: 10 })).to.be.reverted
     })
 
     it('should emit the mint event', async () => {
       let inputUnderlyings = parseEther('0.1')
       let outputRedeems = inputUnderlyings.mul(quote).div(base)
       await expect(
-        trader.safeMintWithETH(optionToken.address, Alice, {
+        primitiveRouter.safeMintWithETH(optionToken.address, Alice, {
           value: inputUnderlyings,
         })
       )
-        .to.emit(trader, 'WethConnectorMint')
+        .to.emit(primitiveRouter, 'Minted')
         .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), outputRedeems.toString())
     })
 
@@ -168,9 +168,9 @@ describe('WethConnector', () => {
       let optionBal = await getTokenBalance(optionToken, Alice)
       let strikeBal = await getTokenBalance(strikeToken, Alice)
 
-      await expect(trader.safeExerciseForETH(optionToken.address, inputUnderlyings, Alice))
-        .to.emit(trader, 'WethConnectorExercise')
-        .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), inputStrikes.toString())
+      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, inputUnderlyings, Alice))
+        .to.emit(primitiveRouter, 'Exercised')
+        .withArgs(Alice, optionToken.address, inputUnderlyings.toString())
 
       let underlyingsChange = (await Admin.getBalance()).sub(underlyingBal)
       let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
@@ -185,17 +185,17 @@ describe('WethConnector', () => {
 
     it('should revert if amount is 0', async () => {
       // If we pass in 0 as the exercise quantity, it will revert due to the contract's nonZero modifier.
-      await expect(trader.safeExerciseForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
+      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
     })
 
     it('should revert if user does not have enough optionToken tokens', async () => {
       // Fails early by checking the user's optionToken balance against the quantity of options they wish to exercise.
-      await expect(trader.safeExerciseForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERR_BAL_OPTIONS)
+      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERR_BAL_OPTIONS)
     })
 
     it('should revert if user does not have enough strike tokens', async () => {
       // Mint some option and redeem tokens to Bob.
-      await trader.safeMintWithETH(optionToken.address, Bob, {
+      await primitiveRouter.safeMintWithETH(optionToken.address, Bob, {
         value: parseEther('0.1'),
       })
 
@@ -203,7 +203,7 @@ describe('WethConnector', () => {
       await strikeToken.connect(User).transfer(Alice, await strikeToken.balanceOf(Bob))
 
       // Attempting to exercise an option without having enough strikeTokens will cause a revert.
-      await expect(trader.connect(User).safeExerciseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
+      await expect(primitiveRouter.connect(User).safeExerciseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
         ERR_BAL_STRIKE
       )
     })
@@ -230,8 +230,8 @@ describe('WethConnector', () => {
       let optionBal = await getTokenBalance(optionToken, Alice)
       let redeemBal = await getTokenBalance(redeemToken, Alice)
 
-      await expect(trader.safeCloseForETH(optionToken.address, inputOptions, Alice))
-        .to.emit(trader, 'WethConnectorClose')
+      await expect(primitiveRouter.safeCloseForETH(optionToken.address, inputOptions, Alice))
+        .to.emit(primitiveRouter, 'Closed')
         .withArgs(Alice, optionToken.address, inputOptions.toString())
 
       let underlyingsChange = (await Admin.getBalance()).sub(underlyingBal)
@@ -247,12 +247,12 @@ describe('WethConnector', () => {
 
     it('should revert if amount is 0', async () => {
       // Fails early if quantity of options to close is 0, because of the contract's nonZero modifier.
-      await expect(trader.safeCloseForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
+      await expect(primitiveRouter.safeCloseForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
     })
 
     it('should revert if user does not have enough redeemTokens', async () => {
       // Mint some option and redeem tokens to Bob.
-      await trader.safeMintWithETH(optionToken.address, Bob, {
+      await primitiveRouter.safeMintWithETH(optionToken.address, Bob, {
         value: ONE_ETHER,
       })
 
@@ -260,14 +260,14 @@ describe('WethConnector', () => {
       await redeemToken.connect(User).transfer(Alice, await redeemToken.balanceOf(Bob))
 
       // Attempting to close options without enough redeemTokens will cause a revert.
-      await expect(trader.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
+      await expect(primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
         ERR_BAL_REDEEM
       )
     })
 
     it('should revert if user does not have enough optionToken tokens', async () => {
       // Mint some option and redeem tokens to Bob.
-      await trader.safeMintWithETH(optionToken.address, Bob, {
+      await primitiveRouter.safeMintWithETH(optionToken.address, Bob, {
         value: parseEther('0.1'),
       })
 
@@ -275,14 +275,14 @@ describe('WethConnector', () => {
       await optionToken.connect(User).transfer(Alice, await optionToken.balanceOf(Bob))
 
       // Attempting to close a quantity of options that msg.sender does not have will cause a revert.
-      await expect(trader.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
+      await expect(primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
         ERR_BAL_OPTIONS
       )
     })
 
     it('should revert if calling unwind and not expired', async () => {
       // The unwind function is for using redeem tokens to withdraw underlying collateral from expired options.
-      await expect(trader.safeUnwindForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(
+      await expect(primitiveRouter.safeUnwindForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(
         ERR_NOT_EXPIRED
       )
     })
@@ -297,13 +297,13 @@ describe('WethConnector', () => {
 
   describe('full test', () => {
     beforeEach(async () => {
-      // Deploy a new trader instance
-      trader = await setup.newWethConnector(Admin, weth.address)
+      // Deploy a new primitiveRouter instance
+      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
       // Approve the tokens that are being used
-      await underlyingToken.approve(trader.address, MILLION_ETHER)
-      await strikeToken.approve(trader.address, MILLION_ETHER)
-      await optionToken.approve(trader.address, MILLION_ETHER)
-      await redeemToken.approve(trader.address, MILLION_ETHER)
+      await underlyingToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await strikeToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await optionToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
     })
 
     it('should handle multiple transactions', async () => {
@@ -329,8 +329,8 @@ describe('WethConnector', () => {
 
   describe('safeUnwindForETH', () => {
     beforeEach(async () => {
-      // Sets up a new trader contract to test with.
-      trader = await setup.newWethConnector(Admin, weth.address)
+      // Deploy a new primitiveRouter instance
+      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
 
       // Creates a new option and redeem to test with. These Test instances can be set to expired arbritrarily.
       optionToken = await setup.newTestOption(Admin, underlyingToken.address, strikeToken.address, base, quote, expiry)
@@ -340,27 +340,27 @@ describe('WethConnector', () => {
       await optionToken.setRedeemToken(redeemToken.address)
 
       // Approve tokens for two signer accounts
-      await underlyingToken.approve(trader.address, MILLION_ETHER)
-      await strikeToken.approve(trader.address, MILLION_ETHER)
-      await optionToken.approve(trader.address, MILLION_ETHER)
-      await redeemToken.approve(trader.address, MILLION_ETHER)
+      await underlyingToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await strikeToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await optionToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
 
-      await underlyingToken.connect(User).approve(trader.address, MILLION_ETHER)
-      await strikeToken.connect(User).approve(trader.address, MILLION_ETHER)
-      await optionToken.connect(User).approve(trader.address, MILLION_ETHER)
-      await redeemToken.connect(User).approve(trader.address, MILLION_ETHER)
+      await underlyingToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
+      await strikeToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
+      await optionToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
+      await redeemToken.connect(User).approve(primitiveRouter.address, MILLION_ETHER)
 
       // Setup initial state and make the option expired
       let inputUnderlyings = parseEther('0.5')
 
       // Mint underlying tokens so we can use them to mint options
       await underlyingToken.deposit({ value: inputUnderlyings })
-      await trader.safeMintWithETH(optionToken.address, Alice, {
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, {
         value: inputUnderlyings,
       })
       // Do the same for the other signer account
       await underlyingToken.deposit({ value: parseEther('0.1') })
-      await trader.connect(User).safeMintWithETH(optionToken.address, Bob, {
+      await primitiveRouter.connect(User).safeMintWithETH(optionToken.address, Bob, {
         value: parseEther('0.1'),
       })
 
@@ -378,8 +378,8 @@ describe('WethConnector', () => {
       let optionBal = await getTokenBalance(optionToken, Alice)
       let redeemBal = await getTokenBalance(redeemToken, Alice)
 
-      await expect(trader.safeUnwindForETH(optionToken.address, inputOptions, Alice))
-        .to.emit(trader, 'WethConnectorUnwind')
+      await expect(primitiveRouter.safeUnwindForETH(optionToken.address, inputOptions, Alice))
+        .to.emit(primitiveRouter, 'Unwound')
         .withArgs(Alice, optionToken.address, inputOptions.toString())
 
       let underlyingsChange = (await Admin.getBalance()).sub(underlyingBal)
@@ -393,7 +393,7 @@ describe('WethConnector', () => {
 
     it('should revert if amount is 0', async () => {
       // Fails early if quantity input is 0, due to the contract's nonZero modifier.
-      await expect(trader.safeUnwindForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
+      await expect(primitiveRouter.safeUnwindForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
     })
 
     it('should revert if user does not have enough redeemToken tokens', async () => {
@@ -402,7 +402,7 @@ describe('WethConnector', () => {
 
       // Attempting to redeem tokens which are not held in msg.sender's balance will cause a revert.
       await expect(
-        trader.safeUnwindForETH(optionToken.address, parseEther('0.1'), Alice, {
+        primitiveRouter.safeUnwindForETH(optionToken.address, parseEther('0.1'), Alice, {
           from: Alice,
         })
       ).to.be.revertedWith(ERR_BAL_REDEEM)
@@ -436,14 +436,14 @@ describe('WethConnector', () => {
       await weth.deposit({ value: parseEther('1.5') })
       await optionToken.mintOptions(Alice)
 
-      // Trader contract instance
-      trader = await setup.newWethConnector(Admin, weth.address)
+      // Deploy a new primitiveRouter instance
+      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
 
-      // Approve tokens for trader to use
-      await weth.approve(trader.address, MILLION_ETHER)
-      await dai.approve(trader.address, MILLION_ETHER)
-      await optionToken.approve(trader.address, MILLION_ETHER)
-      await redeemToken.approve(trader.address, MILLION_ETHER)
+      // Approve tokens for primitiveRouter to use
+      await weth.approve(primitiveRouter.address, MILLION_ETHER)
+      await dai.approve(primitiveRouter.address, MILLION_ETHER)
+      await optionToken.approve(primitiveRouter.address, MILLION_ETHER)
+      await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
     })
 
     safeRedeemForETH = async (inputRedeems) => {
@@ -453,8 +453,8 @@ describe('WethConnector', () => {
       // The balance of the user we are checking before and after is their ether balance.
       let strikeBal = await Admin.getBalance()
 
-      await expect(trader.safeRedeemForETH(optionToken.address, inputRedeems, Alice))
-        .to.emit(trader, 'WethConnectorRedeem')
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, inputRedeems, Alice))
+        .to.emit(primitiveRouter, 'Redeemed')
         .withArgs(Alice, optionToken.address, inputRedeems.toString())
 
       let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
@@ -468,23 +468,23 @@ describe('WethConnector', () => {
 
     it('should revert if amount is 0', async () => {
       // Fails early if quantity input is 0, due to the contract's nonZero modifier.
-      await expect(trader.safeRedeemForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, 0, Alice)).to.be.revertedWith(ERR_ZERO)
     })
 
     it('should revert if user does not have enough redeemToken tokens', async () => {
       // Fails early if the user is attempting to redeem tokens that they don't have.
-      await expect(trader.safeRedeemForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERR_BAL_REDEEM)
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERR_BAL_REDEEM)
     })
 
     it('should revert if contract does not have enough strike tokens', async () => {
       // If option tokens are not exercised, then no strikeTokens are stored in the option contract.
       // If no strikeTokens are stored in the contract, redeemTokens cannot be utilized until:
       // options are exercised, or become expired.
-      await expect(trader.safeRedeemForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(ERR_BAL_STRIKE)
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(ERR_BAL_STRIKE)
     })
 
     it('should redeemToken consecutively', async () => {
-      await trader.safeExerciseWithETH(optionToken.address, Alice, {
+      await primitiveRouter.safeExerciseWithETH(optionToken.address, Alice, {
         value: parseEther('1'),
       })
       await safeRedeemForETH(parseEther('0.1'))
@@ -506,12 +506,12 @@ describe('WethConnector', () => {
       let strikeBal = await getTokenBalance(strikeToken, Alice)
 
       await expect(
-        trader.safeExerciseWithETH(optionToken.address, Alice, {
+        primitiveRouter.safeExerciseWithETH(optionToken.address, Alice, {
           value: inputStrikes,
         })
       )
-        .to.emit(trader, 'WethConnectorExercise')
-        .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), inputStrikes.toString())
+        .to.emit(primitiveRouter, 'Exercised')
+        .withArgs(Alice, optionToken.address, inputUnderlyings.toString())
 
       let underlyingsChange = (await Admin.getBalance()).sub(underlyingBal)
       let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
@@ -526,7 +526,7 @@ describe('WethConnector', () => {
 
     it('should revert if amount is 0', async () => {
       // Fails early if quantity input is 0, due to the contract's nonZero modifier.
-      await expect(trader.safeExerciseWithETH(optionToken.address, Alice)).to.be.revertedWith(ERR_ZERO)
+      await expect(primitiveRouter.safeExerciseWithETH(optionToken.address, Alice)).to.be.revertedWith(ERR_ZERO)
     })
 
     it('should exercise consecutively', async () => {
