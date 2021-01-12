@@ -532,7 +532,7 @@ describe('PrimitiveRouter for WETH', () => {
       let optionAddress = optionToken.address
       let liquidity = parseEther('0.1')
       let path = [redeemToken.address, weth.address]
-      let pairAddress = await primitiveRouter.pairFor(path[0], path[1])
+      let pairAddress = await uniswapFactory.getPair(path[0], path[1])
       let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
       await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
       assert.equal((await pair.balanceOf(Alice)) >= liquidity, true, 'err not enough pair tokens')
