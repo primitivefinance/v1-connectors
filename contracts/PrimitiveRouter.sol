@@ -359,6 +359,31 @@ contract PrimitiveRouter is
     }
 
     /**
+     * @dev    Write options by minting option tokens and selling the long option tokens for premium.
+     * @notice IMPORTANT: if `minPayout` is 0, this function can cost the caller `underlyingToken`s.
+     * @param optionToken The option contract to underwrite.
+     * @param writeQuantity The quantity of option tokens to write and equally, the quantity of underlyings to deposit.
+     * @param minPayout The minimum amount of underlyingTokens to receive from selling long option tokens.
+     */
+    function mintOptionsThenFlashCloseLongForETH(
+        IOption optionToken,
+        uint256 writeQuantity,
+        uint256 minPayout
+    ) external returns (bool) {
+        require(optionToken.getUnderlyingTokenAddress() == address(weth), "PrimitiveV1: NOT_WETH");
+        // Pulls underlyingTokens from `msg.sender` using `transferFrom`. Mints option tokens to `msg.sender`.
+        (, uint256 outputRedeems) =
+            safeMint(optionToken, writeQuantity, msg.sender);
+
+        // Sell the long option tokens for underlyingToken premium.
+        bool success = closeFlashLong(optionToken, outputRedeems, minPayout);
+        require(success, "ERR_FLASH_CLOSE");
+        _withdrawEthAndSend(msg.sender, minPayout);
+        emit WroteOption(msg.sender, writeQuantity);
+        return success;
+    }
+
+    /**
      * @dev    Write WETH options using ETH and sell them for premium.
      * @notice IMPORTANT: if `minPayout` is 0, this function can cost the caller `underlyingToken`s.
      * @param optionToken The option contract to underwrite.
