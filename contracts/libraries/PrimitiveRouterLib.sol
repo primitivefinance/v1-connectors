@@ -1,10 +1,31 @@
-pragma solidity 0.6.2;
+// SPDX-License-Identifier: MIT
+// Copyright 2021 Primitive Finance
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-///
-/// @title   Library for business logic for connecting Uniswap V2 Protocol functions with Primitive V1.
-/// @notice  Primitive Router Lib - @primitivefi/v1-connectors@v1.3.0
-/// @author  Primitive
-///
+pragma solidity ^0.6.2;
+
+/**
+ * @title   Library for Swap Logic for Uniswap AMM.
+ * @notice  Primitive Router Lib - @primitivefi/v1-connectors@2.0.0
+ * @author  Primitive
+ */
 
 // Uniswap
 import {
@@ -28,21 +49,28 @@ library PrimitiveRouterLib {
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
     /**
-    * @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
-    * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
-    *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
-    *         Buying negative premium options will pay out redeemTokens.
-    *         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
-    *         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
-    * @param  router The UniswapV2Router02 contract.
-    * @param  optionToken The optionToken to get the premium cost of purchasing.
-    * @param  quantity The quantity of long option tokens that will be purchased.
+     * @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
+     * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
+     *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
+     *         Buying negative premium options will pay out redeemTokens.
+     *         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
+     *         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
+     * @param  router The UniswapV2Router02 contract.
+     * @param  optionToken The optionToken to get the premium cost of purchasing.
+     * @param  quantity The quantity of long option tokens that will be purchased.
      */
-    function getOpenPremium(IUniswapV2Router02 router, IOption optionToken, uint256 quantity)
+    function getOpenPremium(
+        IUniswapV2Router02 router,
+        IOption optionToken,
+        uint256 quantity
+    )
         internal
         view
-        /* override */
-        returns (uint256, uint256)
+        returns (
+            /* override */
+            uint256,
+            uint256
+        )
     {
         // longOptionTokens are opened by doing a swap from redeemTokens to underlyingTokens effectively.
         address[] memory path = new address[](2);
@@ -113,16 +141,23 @@ library PrimitiveRouterLib {
     }
 
     /**
-    * @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
-    * @param  router The UniswapV2Router02 contract.
-    * @param  optionToken The optionToken to get the premium cost of purchasing.
-    * @param  quantity The quantity of short option tokens that will be closed.
+     * @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
+     * @param  router The UniswapV2Router02 contract.
+     * @param  optionToken The optionToken to get the premium cost of purchasing.
+     * @param  quantity The quantity of short option tokens that will be closed.
      */
-    function getClosePremium(IUniswapV2Router02 router,  IOption optionToken, uint256 quantity)
+    function getClosePremium(
+        IUniswapV2Router02 router,
+        IOption optionToken,
+        uint256 quantity
+    )
         internal
         view
-        /* override */
-        returns (uint256, uint256)
+        returns (
+            /* override */
+            uint256,
+            uint256
+        )
     {
         // longOptionTokens are closed by doing a swap from underlyingTokens to redeemTokens.
         address[] memory path = new address[](2);
@@ -177,8 +212,8 @@ library PrimitiveRouterLib {
     }
 
     /**
-    * @dev    Calculates the proportional quantity of long option tokens per short option token.
-    * @notice For each long option token, there is quoteValue / baseValue quantity of short option tokens.
+     * @dev    Calculates the proportional quantity of long option tokens per short option token.
+     * @notice For each long option token, there is quoteValue / baseValue quantity of short option tokens.
      */
     function getProportionalLongOptions(
         IOption optionToken,
@@ -192,7 +227,7 @@ library PrimitiveRouterLib {
         return quantityLong;
     }
 
-    /** 
+    /**
      * @dev    Calculates the proportional quantity of short option tokens per long option token.
      * @notice For each short option token, there is baseValue / quoteValue quantity of long option tokens.
      */
@@ -212,7 +247,11 @@ library PrimitiveRouterLib {
      * @dev Deposits amount of ethers into WETH contract. Then sends WETH to "to".
      * @param to The address to send WETH ERC-20 tokens to.
      */
-    function safeTransferETHFromWETH(IWETH weth, address to, uint amount) internal {
+    function safeTransferETHFromWETH(
+        IWETH weth,
+        address to,
+        uint256 amount
+    ) internal {
         // Deposit the ethers received from amount into the WETH contract.
         weth.deposit.value(amount)();
 
@@ -225,7 +264,11 @@ library PrimitiveRouterLib {
      * @param to The address to send withdrawn ethers to.
      * @param amount The amount of WETH to unwrap.
      */
-    function safeTransferWETHToETH(IWETH weth, address to, uint256 amount) internal {
+    function safeTransferWETHToETH(
+        IWETH weth,
+        address to,
+        uint256 amount
+    ) internal {
         // Withdraw ethers with weth.
         weth.withdraw(amount);
         // Send ether.
@@ -233,5 +276,4 @@ library PrimitiveRouterLib {
         // Revert is call is unsuccessful.
         require(success, "PrimitiveV1: ERR_SENDING_ETHER");
     }
-
 }

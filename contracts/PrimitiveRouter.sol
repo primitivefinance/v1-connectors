@@ -1,5 +1,25 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.2;
+// Copyright 2021 Primitive Finance
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+pragma solidity ^0.6.2;
 
 /**
  * @title   A user-friendly smart contract to interface with the Primitive and Uniswap protocols.
@@ -7,6 +27,12 @@ pragma solidity 0.6.2;
  * @author  Primitive
  */
 
+// Open Zeppelin
+import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import {
+    ReentrancyGuard
+} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // WETH Interface
 import {IWETH} from "./interfaces/IWETH.sol";
 // Uniswap V2 & Primitive V1
@@ -23,12 +49,6 @@ import {
     IOption,
     IERC20
 } from "./interfaces/IPrimitiveRouter.sol";
-// Open Zeppelin
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {PrimitiveRouterLib} from "./libraries/PrimitiveRouterLib.sol";
 
 import "hardhat/console.sol";
@@ -79,7 +99,7 @@ contract PrimitiveRouter is
         _;
     }
 
-    // ==== Constructor ====
+    // ===== Constructor =====
 
     constructor(address weth_) public {
         require(address(weth) == address(0x0), "ERR_INITIALIZED");
@@ -91,13 +111,13 @@ contract PrimitiveRouter is
         assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
     }
 
-    // ==== Primitive Core ====
+    // ===== Primitive Core =====
 
     /**
-     * @dev Conducts important safety checks to safely mint option tokens.
-     * @param optionToken The address of the option token to mint.
-     * @param mintQuantity The quantity of option tokens to mint.
-     * @param receiver The address which receives the minted option tokens.
+     * @dev     Conducts important safety checks to safely mint option tokens.
+     * @param   optionToken The address of the option token to mint.
+     * @param   mintQuantity The quantity of option tokens to mint.
+     * @param   receiver The address which receives the minted option tokens.
      */
     function safeMint(
         IOption optionToken,
@@ -122,11 +142,11 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev Swaps strikeTokens to underlyingTokens using the strike ratio as the exchange rate.
-     * @notice Burns optionTokens, option contract receives strikeTokens, user receives underlyingTokens.
-     * @param optionToken The address of the option contract.
-     * @param exerciseQuantity Quantity of optionTokens to exercise.
-     * @param receiver The underlyingTokens are sent to the receiver address.
+     * @dev     Swaps strikeTokens to underlyingTokens using the strike ratio as the exchange rate.
+     * @notice  Burns optionTokens, option contract receives strikeTokens, user receives underlyingTokens.
+     * @param   optionToken The address of the option contract.
+     * @param   exerciseQuantity Quantity of optionTokens to exercise.
+     * @param   receiver The underlyingTokens are sent to the receiver address.
      */
     function safeExercise(
         IOption optionToken,
@@ -160,11 +180,11 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev Burns redeemTokens to withdraw available strikeTokens.
-     * @notice inputRedeems = outputStrikes.
-     * @param optionToken The address of the option contract.
-     * @param redeemQuantity redeemQuantity of redeemTokens to burn.
-     * @param receiver The strikeTokens are sent to the receiver address.
+     * @dev     Burns redeemTokens to withdraw available strikeTokens.
+     * @notice  inputRedeems = outputStrikes.
+     * @param   optionToken The address of the option contract.
+     * @param   redeemQuantity redeemQuantity of redeemTokens to burn.
+     * @param   receiver The strikeTokens are sent to the receiver address.
      */
     function safeRedeem(
         IOption optionToken,
@@ -181,13 +201,13 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev Burn optionTokens and redeemTokens to withdraw underlyingTokens.
-     * @notice The redeemTokens to burn is equal to the optionTokens * strike ratio.
-     * inputOptions = inputRedeems / strike ratio = outUnderlyings
-     * @param optionToken The address of the option contract.
-     * @param closeQuantity Quantity of optionTokens to burn.
-     * (Implictly will burn the strike ratio quantity of redeemTokens).
-     * @param receiver The underlyingTokens are sent to the receiver address.
+     * @dev     Burn optionTokens and redeemTokens to withdraw underlyingTokens.
+     * @notice  The redeemTokens to burn is equal to the optionTokens * strike ratio.
+     *          inputOptions = inputRedeems / strike ratio = outUnderlyings
+     * @param   optionToken The address of the option contract.
+     * @param   closeQuantity Quantity of optionTokens to burn.
+     *          (Implictly will burn the strike ratio quantity of redeemTokens).
+     * @param   receiver The underlyingTokens are sent to the receiver address.
      */
     function safeClose(
         IOption optionToken,
@@ -223,40 +243,13 @@ contract PrimitiveRouter is
         return optionToken.closeOptions(receiver);
     }
 
-    /**
-     * @dev Burn optionTokens and redeemTokens to withdraw underlyingTokens.
-     * @notice The redeemTokens to burn is equal to the optionTokens * strike ratio.
-     * inputOptions = inputRedeems / strike ratio = outUnderlyings
-     * @param optionToken The address of the option contract.
-     * @param closeQuantity Quantity of optionTokens to burn.
-     * (Implictly will burn the strike ratio quantity of redeemTokens).
-     * @param receiver The underlyingTokens are sent to the receiver address.
-     */
-    /* function safeCloseWithPermit(
-        IOption optionToken,
-        uint256 closeQuantity,
-        address receiver,
-        uint deadline, uint8 v, bytes32 r, bytes32 s
-    )
-        public
-        nonZero(closeQuantity)
-        returns (
-            uint256,
-            uint256,
-            uint256
-        )
-    {
-        optionToken.permit(msg.sender, address(this), uint(-1), deadline, v, r, s);
-        return safeClose(optionToken, closeQuantity, receiver);
-    } */
-
-    // ==== Primitive Core WETH  Abstraction ====
+    // ===== Primitive Core WETH Abstraction =====
 
     /**
-     *@dev Mints msg.value quantity of options and "quote" (option parameter) quantity of redeem tokens.
-     *@notice This function is for options that have WETH as the underlying asset.
-     *@param optionToken The address of the option token to mint.
-     *@param receiver The address which receives the minted option and redeem tokens.
+     * @dev     Mints msg.value quantity of options and "quote" (option parameter) quantity of redeem tokens.
+     * @notice  This function is for options that have WETH as the underlying asset.
+     * @param   optionToken The address of the option token to mint.
+     * @param   receiver The address which receives the minted option and redeem tokens.
      */
     function safeMintWithETH(IOption optionToken, address receiver)
         public
@@ -287,13 +280,13 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev Swaps msg.value of strikeTokens (ethers) to underlyingTokens.
-     * Uses the strike ratio as the exchange rate. Strike ratio = base / quote.
-     * Msg.value (quote units) * base / quote = base units (underlyingTokens) to withdraw.
-     * @notice This function is for options with WETH as the strike asset.
-     * Burns option tokens, accepts ethers, and pushes out underlyingTokens.
-     * @param optionToken The address of the option contract.
-     * @param receiver The underlyingTokens are sent to the receiver address.
+     * @dev     Swaps msg.value of strikeTokens (ethers) to underlyingTokens.
+     *          Uses the strike ratio as the exchange rate. Strike ratio = base / quote.
+     *          Msg.value (quote units) * base / quote = base units (underlyingTokens) to withdraw.
+     * @notice  This function is for options with WETH as the strike asset.
+     *          Burns option tokens, accepts ethers, and pushes out underlyingTokens.
+     * @param   optionToken The address of the option contract.
+     * @param   receiver The underlyingTokens are sent to the receiver address.
      */
     function safeExerciseWithETH(IOption optionToken, address receiver)
         public
@@ -337,13 +330,13 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev Swaps strikeTokens to underlyingTokens, WETH, which is converted to ethers before withdrawn.
-     * Uses the strike ratio as the exchange rate. Strike ratio = base / quote.
-     * @notice This function is for options with WETH as the underlying asset.
-     * Burns option tokens, pulls strikeTokens, and pushes out ethers.
-     * @param optionToken The address of the option contract.
-     * @param exerciseQuantity Quantity of optionTokens to exercise.
-     * @param receiver The underlyingTokens (ethers) are sent to the receiver address.
+     * @dev     Swaps strikeTokens to underlyingTokens, WETH, which is converted to ethers before withdrawn.
+     *          Uses the strike ratio as the exchange rate. Strike ratio = base / quote.
+     * @notice  This function is for options with WETH as the underlying asset.
+     *          Burns option tokens, pulls strikeTokens, and pushes out ethers.
+     * @param   optionToken The address of the option contract.
+     * @param   exerciseQuantity Quantity of optionTokens to exercise.
+     * @param   receiver The underlyingTokens (ethers) are sent to the receiver address.
      */
     function safeExerciseForETH(
         IOption optionToken,
@@ -367,12 +360,12 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev Burns redeem tokens to withdraw strike tokens (ethers) at a 1:1 ratio.
-     * @notice This function is for options that have WETH as the strike asset.
-     * Converts WETH to ethers, and withdraws ethers to the receiver address.
-     * @param optionToken The address of the option contract.
-     * @param redeemQuantity The quantity of redeemTokens to burn.
-     * @param receiver The strikeTokens (ethers) are sent to the receiver address.
+     * @dev     Burns redeem tokens to withdraw strike tokens (ethers) at a 1:1 ratio.
+     * @notice  This function is for options that have WETH as the strike asset.
+     *          Converts WETH to ethers, and withdraws ethers to the receiver address.
+     * @param   optionToken The address of the option contract.
+     * @param   redeemQuantity The quantity of redeemTokens to burn.
+     * @param   receiver The strikeTokens (ethers) are sent to the receiver address.
      */
     function safeRedeemForETH(
         IOption optionToken,
@@ -424,55 +417,7 @@ contract PrimitiveRouter is
         return (inputRedeems, inputOptions, outUnderlyings);
     }
 
-    // ==== Swap Operations ====
-
-    /**
-     * @dev    Write options by minting option tokens and selling the long option tokens for premium.
-     * @notice IMPORTANT: if `minPayout` is 0, this function can cost the caller `underlyingToken`s.
-     * @param optionToken The option contract to underwrite.
-     * @param writeQuantity The quantity of option tokens to write and equally, the quantity of underlyings to deposit.
-     * @param minPayout The minimum amount of underlyingTokens to receive from selling long option tokens.
-     */
-    function mintOptionsThenFlashCloseLong(
-        IOption optionToken,
-        uint256 writeQuantity,
-        uint256 minPayout
-    ) external returns (bool) {
-        // Pulls underlyingTokens from `msg.sender` using `transferFrom`. Mints option tokens to `msg.sender`.
-        (, uint256 outputRedeems) =
-            safeMint(optionToken, writeQuantity, msg.sender);
-
-        // Sell the long option tokens for underlyingToken premium.
-        bool success = closeFlashLong(optionToken, outputRedeems, minPayout);
-        require(success, "ERR_FLASH_CLOSE");
-        emit WroteOption(msg.sender, writeQuantity);
-        return success;
-    }
-
-    /**
-     * @dev    Write WETH options using ETH and sell them for premium.
-     * @notice IMPORTANT: if `minPayout` is 0, this function can cost the caller `underlyingToken`s.
-     * @param optionToken The option contract to underwrite.
-     * @param minPayout The minimum amount of underlyingTokens to receive from selling long option tokens.
-     */
-    function mintETHOptionsThenFlashCloseLongForETH(
-        IOption optionToken,
-        uint256 minPayout
-    ) external payable returns (bool) {
-        require(
-            optionToken.getUnderlyingTokenAddress() == address(weth),
-            "PrimitiveV1: NOT_WETH"
-        );
-        // Mints WETH options uses an ether balance `msg.value`.
-        (, uint256 outputRedeems) = safeMintWithETH(optionToken, msg.sender);
-
-        // Sell the long option tokens for underlyingToken premium.
-        bool success =
-            closeFlashLongForETH(optionToken, outputRedeems, minPayout);
-        require(success, "ERR_FLASH_CLOSE");
-        emit WroteOption(msg.sender, msg.value);
-        return success;
-    }
+    // ===== Swap Operations =====
 
     /**
      * @dev    Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
@@ -508,12 +453,12 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
-     * @notice IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
-     *         IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
-     * @param optionToken The option address.
-     * @param amountOptions The quantity of longOptionTokens to purchase.
-     * @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
+     * @dev     Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
+     * @notice  IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
+     *          IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
+     * @param   optionToken The option address.
+     * @param   amountOptions The quantity of longOptionTokens to purchase.
+     * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
      */
     function openFlashLongWithETH(
         IOption optionToken,
@@ -542,12 +487,12 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Closes a longOptionToken position by flash swapping in redeemTokens,
-     *         closing the option, and paying back in underlyingTokens.
-     * @notice IMPORTANT: If minPayout is 0, this function will cost the caller to close the option, for no gain.
-     * @param optionToken The address of the longOptionTokens to close.
-     * @param amountRedeems The quantity of redeemTokens to borrow to close the options.
-     * @param minPayout The minimum payout of underlyingTokens sent out to the user.
+     * @dev     Closes a longOptionToken position by flash swapping in redeemTokens,
+     *          closing the option, and paying back in underlyingTokens.
+     * @notice  IMPORTANT: If minPayout is 0, this function will cost the caller to close the option, for no gain.
+     * @param   optionToken The address of the longOptionTokens to close.
+     * @param   amountRedeems The quantity of redeemTokens to borrow to close the options.
+     * @param   minPayout The minimum payout of underlyingTokens sent out to the user.
      */
     function closeFlashLong(
         IOption optionToken,
@@ -575,12 +520,12 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Closes a longOptionToken position by flash swapping in redeemTokens,
-     *         closing the option, and paying back in underlyingTokens.
-     * @notice IMPORTANT: If minPayout is 0, this function will cost the caller to close the option, for no gain.
-     * @param optionToken The address of the longOptionTokens to close.
-     * @param amountRedeems The quantity of redeemTokens to borrow to close the options.
-     * @param minPayout The minimum payout of underlyingTokens sent out to the user.
+     * @dev     Closes a longOptionToken position by flash swapping in redeemTokens,
+     *          closing the option, and paying back in underlyingTokens.
+     * @notice  IMPORTANT: If minPayout is 0, this function will cost the caller to close the option, for no gain.
+     * @param   optionToken The address of the longOptionTokens to close.
+     * @param   amountRedeems The quantity of redeemTokens to borrow to close the options.
+     * @param   minPayout The minimum payout of underlyingTokens sent out to the user.
      */
     function closeFlashLongForETH(
         IOption optionToken,
@@ -652,18 +597,18 @@ contract PrimitiveRouter is
         pair.swap(amount0Out, amount1Out, address(this), params);
     }
 
-    // ==== Liquidity Functions ====
+    // ===== Liquidity Functions =====
 
     /**
-     * @dev    Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
-     * @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
-     *         underlyingToken -> redeemToken -> UNI-V2.
-     * @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
-     * @param quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
-     * @param amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
-     * @param amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
-     * @param to The address that receives UNI-V2 shares.
-     * @param deadline The timestamp to expire a pending transaction.
+     * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+     * @notice  Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
+     *          underlyingToken -> redeemToken -> UNI-V2.
+     * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
+     * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
+     * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
+     * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
+     * @param   to The address that receives UNI-V2 shares.
+     * @param   deadline The timestamp to expire a pending transaction.
      */
     function addShortLiquidityWithUnderlying(
         address optionAddress,
@@ -739,15 +684,15 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
-     * @notice Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
-     *         underlyingToken -> redeemToken -> UNI-V2.
-     * @param optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
-     * @param quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
-     * @param amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
-     * @param amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
-     * @param to The address that receives UNI-V2 shares.
-     * @param deadline The timestamp to expire a pending transaction.
+     * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+     * @notice  Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
+     *          underlyingToken -> redeemToken -> UNI-V2.
+     * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
+     * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
+     * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
+     * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
+     * @param   to The address that receives UNI-V2 shares.
+     * @param   deadline The timestamp to expire a pending transaction.
      */
     function addShortLiquidityWithETH(
         address optionAddress,
@@ -836,17 +781,17 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
-     * @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
-     *         Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
-     *         Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
-     *         UNI-V2 -> optionToken -> underlyingToken.
-     * @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
-     * @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
-     * @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
-     * @param amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
-     * @param to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
-     * @param deadline The timestamp to expire a pending transaction.
+     * @dev     Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
+     * @notice  Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
+     *          Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
+     *          Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
+     *          UNI-V2 -> optionToken -> underlyingToken.
+     * @param   optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
+     * @param   liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
+     * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
+     * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
+     * @param   to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
+     * @param   deadline The timestamp to expire a pending transaction.
      */
     function removeShortLiquidityThenCloseOptions(
         address optionAddress,
@@ -944,17 +889,17 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
-     * @notice Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
-     *         Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
-     *         Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
-     *         UNI-V2 -> optionToken -> underlyingToken.
-     * @param optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
-     * @param liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
-     * @param amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
-     * @param amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
-     * @param to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
-     * @param deadline The timestamp to expire a pending transaction.
+     * @dev     Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
+     * @notice  Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from msg.sender.
+     *          Then closes the longOptionTokens and withdraws underlyingTokens to the "to" address.
+     *          Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "to" address.
+     *          UNI-V2 -> optionToken -> underlyingToken.
+     * @param   optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
+     * @param   liquidity The quantity of liquidity tokens to pull from msg.sender and burn.
+     * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
+     * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
+     * @param   to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
+     * @param   deadline The timestamp to expire a pending transaction.
      */
     function removeShortLiquidityThenCloseOptionsForETH(
         address optionAddress,
@@ -1073,7 +1018,7 @@ contract PrimitiveRouter is
             );
     }
 
-    // ==== Flash Functions ====
+    // ===== Flash Functions =====
 
     function _flashMintShortOptionsThenSwap(
         address optionAddress,
@@ -1138,18 +1083,18 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
-     *         shortOptionTokens and underlyingTokens.
-     *         Uses underlyingTokens to mint long (option) + short (redeem) tokens.
-     *         Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair with shortOptionTokens,
-     *         AND any remainder quantity of underlyingTokens (paid by msg.sender).
-     * @notice If the first address in the path is not the shortOptionToken address, the tx will fail.
-     *         IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
-     * @param optionAddress The address of the Option contract.
-     * @param flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
-     * @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
-     * @param to The address to send the shortOptionToken proceeds and longOptionTokens to.
-     * @return success bool Whether the transaction was successful or not.
+     * @dev     Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
+     *          shortOptionTokens and underlyingTokens.
+     *          Uses underlyingTokens to mint long (option) + short (redeem) tokens.
+     *          Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair with shortOptionTokens,
+     *          AND any remainder quantity of underlyingTokens (paid by msg.sender).
+     * @notice  If the first address in the path is not the shortOptionToken address, the tx will fail.
+     *          IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
+     * @param   optionAddress The address of the Option contract.
+     * @param   flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
+     * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
+     * @param   to The address to send the shortOptionToken proceeds and longOptionTokens to.
+     * @return  success bool Whether the transaction was successful or not.
      */
     function flashMintShortOptionsThenSwap(
         address optionAddress,
@@ -1188,18 +1133,18 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
-     *         shortOptionTokens and underlyingTokens.
-     *         Uses underlyingTokens to mint long (option) + short (redeem) tokens.
-     *         Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair with shortOptionTokens,
-     *         AND any remainder quantity of underlyingTokens (paid by msg.sender).
-     * @notice If the first address in the path is not the shortOptionToken address, the tx will fail.
-     *         IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
-     * @param optionAddress The address of the Option contract.
-     * @param flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
-     * @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
-     * @param to The address to send the shortOptionToken proceeds and longOptionTokens to.
-     * @return success bool Whether the transaction was successful or not.
+     * @dev     Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
+     *          shortOptionTokens and underlyingTokens.
+     *          Uses underlyingTokens to mint long (option) + short (redeem) tokens.
+     *          Sends longOptionTokens to msg.sender, and pays back the UniswapV2Pair with shortOptionTokens,
+     *          AND any remainder quantity of underlyingTokens (paid by msg.sender).
+     * @notice  If the first address in the path is not the shortOptionToken address, the tx will fail.
+     *          IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
+     * @param   optionAddress The address of the Option contract.
+     * @param   flashLoanQuantity The quantity of options to mint using borrowed underlyingTokens.
+     * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
+     * @param   to The address to send the shortOptionToken proceeds and longOptionTokens to.
+     * @return  success bool Whether the transaction was successful or not.
      */
     function flashMintShortOptionsThenSwapWithETH(
         address optionAddress,
@@ -1322,12 +1267,12 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
-     * @notice IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
-     * @param optionAddress The address of the longOptionTokes to close.
-     * @param flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
-     * @param minPayout The minimum payout of underlyingTokens sent to the `to` address.
-     * @param to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
+     * @dev     Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
+     * @notice  IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
+     * @param   optionAddress The address of the longOptionTokes to close.
+     * @param   flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
+     * @param   minPayout The minimum payout of underlyingTokens sent to the `to` address.
+     * @param   to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
      */
     function flashCloseLongOptionsThenSwap(
         address optionAddress,
@@ -1360,12 +1305,12 @@ contract PrimitiveRouter is
     }
 
     /**
-     * @dev    Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
-     * @notice IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
-     * @param optionAddress The address of the longOptionTokes to close.
-     * @param flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
-     * @param minPayout The minimum payout of underlyingTokens sent to the `to` address.
-     * @param to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
+     * @dev     Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
+     * @notice  IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
+     * @param   optionAddress The address of the longOptionTokes to close.
+     * @param   flashLoanQuantity The quantity of shortOptionTokens borrowed to use to close longOptionTokens.
+     * @param   minPayout The minimum payout of underlyingTokens sent to the `to` address.
+     * @param   to The address which is sent the underlyingToken payout, or liable to pay for a negative payout.
      */
     function flashCloseLongOptionsThenSwapForETH(
         address optionAddress,
@@ -1401,14 +1346,14 @@ contract PrimitiveRouter is
         return (outputUnderlyings, underlyingPayout);
     }
 
-    // ==== Callback Implementation ====
+    // ===== Callback Implementation =====
 
     /**
-     * @dev The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
-     * @param sender The original msg.sender of the UniswapV2Pair.swap() call.
-     * @param amount0 The quantity of token0 received to the `to` address in the swap() call.
-     * @param amount1 The quantity of token1 received to the `to` address in the swap() call.
-     * @param data The payload passed in the `data` parameter of the swap() call.
+     * @dev     The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
+     * @param   sender The original msg.sender of the UniswapV2Pair.swap() call.
+     * @param   amount0 The quantity of token0 received to the `to` address in the swap() call.
+     * @param   amount1 The quantity of token1 received to the `to` address in the swap() call.
+     * @param   data The payload passed in the `data` parameter of the swap() call.
      */
     function uniswapV2Call(
         address sender,
@@ -1427,7 +1372,7 @@ contract PrimitiveRouter is
         );
     }
 
-    // ==== View ====
+    // ===== View =====
 
     /**
      * @dev Gets the name of the contract.
