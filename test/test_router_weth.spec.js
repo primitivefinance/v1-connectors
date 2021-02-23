@@ -158,7 +158,7 @@ describe('PrimitiveRouter for WETH', () => {
     trader = await setup.newTrader(Admin, weth.address)
 
     // Uniswap Connector contract
-    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, uniswapRouter.address, uniswapFactory.address])
+    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, uniswapRouter.address, uniswapFactory.address, registry.address])
 
     // Approve all tokens and contracts
     await batchApproval(

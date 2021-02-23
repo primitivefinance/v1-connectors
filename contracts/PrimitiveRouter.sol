@@ -50,6 +50,9 @@ import {
     IERC20
 } from "./interfaces/IPrimitiveRouter.sol";
 import {PrimitiveRouterLib} from "./libraries/PrimitiveRouterLib.sol";
+import {
+  IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 
 import "hardhat/console.sol";
 
@@ -66,6 +69,7 @@ contract PrimitiveRouter is
     IUniswapV2Router02 public override router =
         IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // The Uniswap contract used to interact with the protocol
     IWETH public weth;
+    IRegistry public registry;
 
     event Initialized(address indexed from); // Emmitted on deployment
     event FlashOpened(address indexed from, uint256 quantity, uint256 premium); // Emmitted on flash opening a long position
@@ -101,10 +105,11 @@ contract PrimitiveRouter is
 
     // ===== Constructor =====
 
-    constructor(address weth_) public {
+    constructor(address weth_, address registry_) public {
         require(address(weth) == address(0x0), "ERR_INITIALIZED");
         weth = IWETH(weth_);
         emit Initialized(msg.sender);
+        registry = IRegistry(registry_);
     }
 
     receive() external payable {

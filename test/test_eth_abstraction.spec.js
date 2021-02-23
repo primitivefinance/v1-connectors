@@ -62,8 +62,8 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
     optionToken = Primitive.optionToken
     redeemToken = Primitive.redeemToken
 
-    // Trader contract instance
-    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
+    // Router contract instance
+    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address, registry.address])
 
     // Approve tokens for primitiveRouter to use
     await underlyingToken.approve(primitiveRouter.address, MILLION_ETHER)
@@ -294,7 +294,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
   describe('full test', () => {
     beforeEach(async () => {
       // Deploy a new primitiveRouter instance
-      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
+      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address, registry.address])
       // Approve the tokens that are being used
       await underlyingToken.approve(primitiveRouter.address, MILLION_ETHER)
       await strikeToken.approve(primitiveRouter.address, MILLION_ETHER)
@@ -346,7 +346,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await optionToken.mintOptions(Alice)
 
       // Deploy a new primitiveRouter instance
-      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address])
+      primitiveRouter = await setup.newTestRouter(Admin, [weth.address, weth.address, weth.address, registry.address])
 
       // Approve tokens for primitiveRouter to use
       await weth.approve(primitiveRouter.address, MILLION_ETHER)
