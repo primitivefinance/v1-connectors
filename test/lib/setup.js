@@ -11,8 +11,6 @@ const Registry = require('@primitivefi/contracts/artifacts/Registry')
 const Flash = require('@primitivefi/contracts/artifacts/Flash')
 const Weth = require('@primitivefi/contracts/artifacts/WETH9.json')
 const Trader = require('@primitivefi/contracts/artifacts/Trader')
-const WethConnector = require('../../build/contracts/WethConnector01.sol/WethConnector01')
-const UniswapConnector = require('../../build/contracts/UniswapConnector03.sol/UniswapConnector03')
 const OptionTemplateLib = require('@primitivefi/contracts/artifacts/OptionTemplateLib')
 const RedeemTemplateLib = require('@primitivefi/contracts/artifacts/RedeemTemplateLib')
 const PrimitiveRouter = require('../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter')
@@ -193,18 +191,6 @@ const newTrader = async (signer, weth) => {
 }
 
 /**
- * @dev Deploys a new Trader contract instance.
- * @param {*} signer
- * @param {*} weth The address of WETH for the respective network.
- */
-const newWethConnector = async (signer, weth) => {
-  const wethConnector = await deployContract(signer, WethConnector, [weth], {
-    gasLimit: 9500000,
-  })
-  return wethConnector
-}
-
-/**
  * @dev Deploys a new Option contract instance through the Registry contract instance.
  * @param {*} signer
  * @param {*} registry The instance of the Registry contract.
@@ -336,7 +322,6 @@ Object.assign(module.exports, {
   newPrimitive,
   approveToken,
   newTrader,
-  newWethConnector,
   newRouter,
   newTestRouter
 })
