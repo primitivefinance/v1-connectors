@@ -43,10 +43,43 @@ import {IWETH} from "../interfaces/IWETH.sol";
 // Open Zeppelin
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import {
+  IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 
 library PrimitiveRouterLib {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
+
+    event Minted(
+        address indexed from,
+        address indexed optionToken,
+        uint256 longQuantity,
+        uint256 shortQuantity
+    );
+
+    event Exercised(
+        address indexed from,
+        address indexed optionToken,
+        uint256 quantity
+    );
+
+    function realOption(
+      IOption option,
+      IRegistry registry
+    ) internal returns (bool) {
+      return(
+        address(option) == registry.getOptionAddress(
+          option.getUnderlyingTokenAddress(),
+          option.getStrikeTokenAddress(),
+          option.getBaseValue(),
+          option.getQuoteValue(),
+          option.getExpiryTime()
+        )
+        &&
+        address(option) != address(0)
+      );
+    }
 
     /**
      * @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
@@ -138,6 +171,89 @@ library PrimitiveRouterLib {
                 .div(100000);
         }
         return (loanRemainderInUnderlyings, negativePremiumPaymentInRedeems);
+    }
+
+    /**
+     * @dev     Swaps msg.value of strikeTokens (ethers) to underlyingTokens.
+     *          Uses the strike ratio as the exchange rate. Strike ratio = base / quote.
+     *          Msg.value (quote units) * base / quote = base units (underlyingTokens) to withdraw.
+     * @notice  This function is for options with WETH as the strike asset.
+     *          Burns option tokens, accepts ethers, and pushes out underlyingTokens.
+     * @param   optionToken The address of the option contract.
+     * @param   receiver The underlyingTokens are sent to the receiver address.
+     */
+    function safeExerciseWithETH(IOption optionToken, address receiver, IWETH weth)
+        internal
+        returns (uint256, uint256)
+    {
+        require(msg.value > 0, "ERR_ZERO");
+        // Require one of the option's assets to be WETH.
+        require(optionToken.getStrikeTokenAddress() == address(weth), "ERR_NOT_WETH");
+        // Calculate quantity of optionTokens needed to burn.
+        // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
+        // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
+        // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
+        // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
+        uint256 inputOptions =
+            PrimitiveRouterLib.getProportionalLongOptions(
+                optionToken,
+                msg.value
+            );
+
+        // Wrap the ethers into WETH, and send the WETH to the option contract to prepare for calling exerciseOptions().
+        safeTransferETHFromWETH(
+            weth,
+            address(optionToken),
+            msg.value
+        );
+        IERC20(address(optionToken)).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            inputOptions
+        );
+
+        // Burns the transferred option tokens, stores the strike asset (ether), and pushes underlyingTokens
+        // to the receiver address.
+        emit Exercised(msg.sender, address(optionToken), inputOptions);
+        return
+            optionToken.exerciseOptions(receiver, inputOptions, new bytes(0));
+    }
+
+    /**
+     * @dev     Swaps strikeTokens to underlyingTokens using the strike ratio as the exchange rate.
+     * @notice  Burns optionTokens, option contract receives strikeTokens, user receives underlyingTokens.
+     * @param   optionToken The address of the option contract.
+     * @param   exerciseQuantity Quantity of optionTokens to exercise.
+     * @param   receiver The underlyingTokens are sent to the receiver address.
+     */
+    function safeExercise(
+        IOption optionToken,
+        uint256 exerciseQuantity,
+        address receiver
+    ) internal returns (uint256, uint256) {
+        // Calculate quantity of strikeTokens needed to exercise quantity of optionTokens.
+        uint256 inputStrikes =
+            PrimitiveRouterLib.getProportionalShortOptions(
+                optionToken,
+                exerciseQuantity
+            );
+        IERC20(address(optionToken)).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            exerciseQuantity
+        );
+        IERC20(optionToken.getStrikeTokenAddress()).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            inputStrikes
+        );
+        emit Exercised(msg.sender, address(optionToken), exerciseQuantity);
+        return
+            optionToken.exerciseOptions(
+                receiver,
+                exerciseQuantity,
+                new bytes(0)
+            );
     }
 
     /**
@@ -241,6 +357,28 @@ library PrimitiveRouterLib {
             );
 
         return quantityShort;
+    }
+
+    function safeTransferThenMint(
+        IOption optionToken,
+        uint256 mintQuantity,
+        address receiver
+    ) internal returns (uint256, uint256) {
+      IERC20(optionToken.getUnderlyingTokenAddress()).safeTransferFrom(
+          msg.sender,
+          address(optionToken),
+          mintQuantity
+      );
+      emit Minted(
+          msg.sender,
+          address(optionToken),
+          mintQuantity,
+          PrimitiveRouterLib.getProportionalShortOptions(
+              optionToken,
+              mintQuantity
+          )
+      );
+      return optionToken.mintOptions(receiver);
     }
 
     /**

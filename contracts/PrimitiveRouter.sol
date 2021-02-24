@@ -124,21 +124,12 @@ contract PrimitiveRouter is
         address receiver
     ) public returns (uint256, uint256) {
         require(mintQuantity > 0, "ERR_ZERO");
-        IERC20(optionToken.getUnderlyingTokenAddress()).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            mintQuantity
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
+        PrimitiveRouterLib.safeTransferThenMint(
+          optionToken,
+          mintQuantity,
+          receiver
         );
-        emit Minted(
-            msg.sender,
-            address(optionToken),
-            mintQuantity,
-            PrimitiveRouterLib.getProportionalShortOptions(
-                optionToken,
-                mintQuantity
-            )
-        );
-        return optionToken.mintOptions(receiver);
     }
 
     /**
@@ -154,30 +145,9 @@ contract PrimitiveRouter is
         address receiver
     ) public returns (uint256, uint256) {
         require(exerciseQuantity > 0, "ERR_ZERO");
-        // Calculate quantity of strikeTokens needed to exercise quantity of optionTokens.
-        address strikeToken = optionToken.getStrikeTokenAddress();
-        uint256 inputStrikes =
-            PrimitiveRouterLib.getProportionalShortOptions(
-                optionToken,
-                exerciseQuantity
-            );
-        IERC20(address(optionToken)).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            exerciseQuantity
-        );
-        IERC20(strikeToken).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputStrikes
-        );
-        emit Exercised(msg.sender, address(optionToken), exerciseQuantity);
-        return
-            optionToken.exerciseOptions(
-                receiver,
-                exerciseQuantity,
-                new bytes(0)
-            );
+        return(
+            PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, receiver)
+          );
     }
 
     /**
@@ -193,15 +163,7 @@ contract PrimitiveRouter is
         address receiver
     ) public returns (uint256) {
       require(redeemQuantity > 0, "ERR_ZERO");
-      require(
-        address(optionToken) == registry.getOptionAddress(
-          optionToken.getUnderlyingTokenAddress(),
-          optionToken.getStrikeTokenAddress(),
-          optionToken.getBaseValue(),
-          optionToken.getQuoteValue(),
-          optionToken.getExpiryTime()
-        ),
-        "INVALID_OPTION");
+      require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         IERC20(optionToken.redeemToken()).safeTransferFrom(
             msg.sender,
             address(optionToken),
@@ -304,40 +266,9 @@ contract PrimitiveRouter is
         payable
         returns (uint256, uint256)
     {
-        require(msg.value > 0, "ERR_ZERO");
-        // Require one of the option's assets to be WETH.
-        address strikeAddress = optionToken.getStrikeTokenAddress();
-        require(strikeAddress == address(weth), "ERR_NOT_WETH");
-
-        uint256 inputStrikes = msg.value;
-        // Calculate quantity of optionTokens needed to burn.
-        // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
-        // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
-        // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
-        // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
-        uint256 inputOptions =
-            PrimitiveRouterLib.getProportionalLongOptions(
-                optionToken,
-                inputStrikes
-            );
-
-        // Wrap the ethers into WETH, and send the WETH to the option contract to prepare for calling exerciseOptions().
-        PrimitiveRouterLib.safeTransferETHFromWETH(
-            weth,
-            address(optionToken),
-            msg.value
+        return(
+          PrimitiveRouterLib.safeExerciseWithETH(optionToken, receiver, weth)
         );
-        IERC20(address(optionToken)).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputOptions
-        );
-
-        // Burns the transferred option tokens, stores the strike asset (ether), and pushes underlyingTokens
-        // to the receiver address.
-        emit Exercised(msg.sender, address(optionToken), inputOptions);
-        return
-            optionToken.exerciseOptions(receiver, inputOptions, new bytes(0));
     }
 
     /**
@@ -1065,7 +996,8 @@ contract PrimitiveRouter is
         // This means the user gets to keep the extra redeemTokens for free.
         // Negative premium amount is the opposite difference of the loan remainder: (paid - flash loan amount)
         uint256 negativePremiumPaymentInRedeems;
-        (loanRemainder, negativePremiumPaymentInRedeems) = getOpenPremium(
+        (loanRemainder, negativePremiumPaymentInRedeems) = PrimitiveRouterLib.getOpenPremium(
+            router,
             IOption(optionAddress),
             flashLoanQuantity
         );
@@ -1246,7 +1178,7 @@ contract PrimitiveRouter is
         // It's the remainder of underlyingTokens after the pair has been paid back underlyingTokens for the
         // flash swapped shortOptionTokens.
         (uint256 underlyingPayout, uint256 loanRemainder) =
-            getClosePremium(IOption(optionAddress), flashLoanQuantity);
+            PrimitiveRouterLib.getClosePremium(router, IOption(optionAddress), flashLoanQuantity);
 
         // In most cases there will be an underlying payout, which is subtracted from the outputUnderlyings.
         if (underlyingPayout > 0) {
@@ -1384,55 +1316,5 @@ contract PrimitiveRouter is
                 (returnData.length == 0 || abi.decode(returnData, (bool))),
             "ERR_UNISWAPV2_CALL_FAIL"
         );
-    }
-
-    // ===== View =====
-
-    /**
-     * @dev Gets the name of the contract.
-     */
-    function getName() external pure override returns (string memory) {
-        return "PrimitiveRouter";
-    }
-
-    /**
-     * @dev Gets the version of the contract.
-     */
-    function getVersion() external pure override returns (uint8) {
-        return uint8(1);
-    }
-
-    /**
-     * @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
-     * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
-     *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
-     *         Buying negative premium options will pay out redeemTokens.
-     *         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
-     *         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
-     * @param  optionToken The optionToken to get the premium cost of purchasing.
-     * @param  quantity The quantity of long option tokens that will be purchased.
-     */
-    function getOpenPremium(IOption optionToken, uint256 quantity)
-        public
-        view
-        override
-        returns (uint256, uint256)
-    {
-        return PrimitiveRouterLib.getOpenPremium(router, optionToken, quantity);
-    }
-
-    /**
-     * @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
-     * @param  optionToken The optionToken to get the premium cost of purchasing.
-     * @param  quantity The quantity of short option tokens that will be closed.
-     */
-    function getClosePremium(IOption optionToken, uint256 quantity)
-        public
-        view
-        override
-        returns (uint256, uint256)
-    {
-        return
-            PrimitiveRouterLib.getClosePremium(router, optionToken, quantity);
     }
 }
