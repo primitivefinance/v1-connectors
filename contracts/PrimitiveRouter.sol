@@ -97,12 +97,6 @@ contract PrimitiveRouter is
         uint256 quantity
     );
 
-    /// @dev Checks the quantity of an operation to make sure its not zero. Fails early.
-    modifier nonZero(uint256 quantity) {
-        require(quantity > 0, "ERR_ZERO");
-        _;
-    }
-
     // ===== Constructor =====
 
     constructor(address weth_, address registry_) public {
@@ -128,7 +122,8 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 mintQuantity,
         address receiver
-    ) public nonZero(mintQuantity) returns (uint256, uint256) {
+    ) public returns (uint256, uint256) {
+        require(mintQuantity > 0, "ERR_ZERO");
         IERC20(optionToken.getUnderlyingTokenAddress()).safeTransferFrom(
             msg.sender,
             address(optionToken),
@@ -157,7 +152,8 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 exerciseQuantity,
         address receiver
-    ) public nonZero(exerciseQuantity) returns (uint256, uint256) {
+    ) public returns (uint256, uint256) {
+        require(exerciseQuantity > 0, "ERR_ZERO");
         // Calculate quantity of strikeTokens needed to exercise quantity of optionTokens.
         address strikeToken = optionToken.getStrikeTokenAddress();
         uint256 inputStrikes =
@@ -195,7 +191,8 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 redeemQuantity,
         address receiver
-    ) public nonZero(redeemQuantity) returns (uint256) {
+    ) public returns (uint256) {
+      require(redeemQuantity > 0, "ERR_ZERO");
       require(
         address(optionToken) == registry.getOptionAddress(
           optionToken.getUnderlyingTokenAddress(),
@@ -229,13 +226,13 @@ contract PrimitiveRouter is
         address receiver
     )
         public
-        nonZero(closeQuantity)
         returns (
             uint256,
             uint256,
             uint256
         )
     {
+        require(closeQuantity > 0, "ERR_ZERO");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
         uint256 inputRedeems =
             PrimitiveRouterLib.getProportionalShortOptions(
@@ -268,9 +265,9 @@ contract PrimitiveRouter is
     function safeMintWithETH(IOption optionToken, address receiver)
         public
         payable
-        nonZero(msg.value)
         returns (uint256, uint256)
     {
+        require(msg.value > 0, "ERR_ZERO");
         // Check to make sure we are minting a WETH call option.
         address underlyingAddress = optionToken.getUnderlyingTokenAddress();
         require(address(weth) == underlyingAddress, "ERR_NOT_WETH");
@@ -305,9 +302,9 @@ contract PrimitiveRouter is
     function safeExerciseWithETH(IOption optionToken, address receiver)
         public
         payable
-        nonZero(msg.value)
         returns (uint256, uint256)
     {
+        require(msg.value > 0, "ERR_ZERO");
         // Require one of the option's assets to be WETH.
         address strikeAddress = optionToken.getStrikeTokenAddress();
         require(strikeAddress == address(weth), "ERR_NOT_WETH");
@@ -356,7 +353,8 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 exerciseQuantity,
         address receiver
-    ) public nonZero(exerciseQuantity) returns (uint256, uint256) {
+    ) public returns (uint256, uint256) {
+        require(exerciseQuantity > 0, "ERR_ZERO");
         // Require one of the option's assets to be WETH.
         address underlyingAddress = optionToken.getUnderlyingTokenAddress();
         require(underlyingAddress == address(weth), "ERR_NOT_WETH");
@@ -385,7 +383,8 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 redeemQuantity,
         address receiver
-    ) public nonZero(redeemQuantity) returns (uint256) {
+    ) public returns (uint256) {
+        require(redeemQuantity > 0, "ERR_ZERO");
         // If options have not been exercised, there will be no strikeTokens to redeem, causing a revert.
         // Burns the redeem tokens that were sent to the contract, and withdraws the same quantity of WETH.
         // Sends the withdrawn WETH to this contract, so that it can be unwrapped prior to being sent to receiver.
@@ -416,13 +415,13 @@ contract PrimitiveRouter is
         address receiver
     )
         public
-        nonZero(closeQuantity)
         returns (
             uint256,
             uint256,
             uint256
         )
     {
+        require(closeQuantity > 0, "ERR_ZERO");
         (uint256 inputRedeems, uint256 inputOptions, uint256 outUnderlyings) =
             safeClose(optionToken, closeQuantity, address(this));
 
@@ -478,7 +477,8 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 amountOptions,
         uint256 maxPremium
-    ) external payable nonZero(msg.value) returns (bool) {
+    ) external payable returns (bool) {
+        require(msg.value > 0, "ERR_ZERO");
         require(maxPremium == msg.value, "PrimitiveV1: ERR_ETH_PREMIUM"); // must assert because cannot check in callback
         bytes4 selector =
             bytes4(
