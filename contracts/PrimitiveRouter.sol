@@ -608,22 +608,15 @@ contract PrimitiveRouter is
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
      * @notice  Pulls underlying tokens from msg.sender and pushes UNI-V2 liquidity tokens to the "to" address.
      *          underlyingToken -> redeemToken -> UNI-V2.
-     * @param   underlying The address of the ERC-20 underlying token.
-     * @param   strike The address of the ERC-20 strike token.
-     * @param   base The quantity of underlying tokens per unit of quote amount of strike tokens.
-     * @param   quote The quantity of strike tokens per unit of base amount of underlying tokens.
-     * @param   expiry The unix timestamp of the option's expiration date.     * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
+     * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
+     * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
      * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
      * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
     function addShortLiquidityWithUnderlying(
-        address underlying,
-        address strike,
-        uint256 base,
-        uint256 quote,
-        uint256 expiry,
+        address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
@@ -638,8 +631,6 @@ contract PrimitiveRouter is
             uint256
         )
     {
-        address optionAddress = registry.getOptionAddress(underlying, strike, base, quote, expiry);
-        require(optionAddress != address(0), "OPTION_DNE");
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;

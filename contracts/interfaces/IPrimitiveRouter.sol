@@ -64,11 +64,7 @@ interface IPrimitiveRouter {
     // ==== Liquidity Functions ====
 
     function addShortLiquidityWithUnderlying(
-        address underlying,
-        address strike,
-        uint256 base,
-        uint256 quote,
-        uint256 expiry,
+        address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
