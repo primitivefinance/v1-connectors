@@ -266,9 +266,18 @@ contract PrimitiveRouter is
         payable
         returns (uint256, uint256)
     {
+      // Calculate quantity of optionTokens needed to burn.
+      // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
+      // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
+      // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
+      // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
         return(
-          PrimitiveRouterLib.safeExerciseWithETH(optionToken, receiver, weth)
-        );
+          PrimitiveRouterLib.safeExerciseWithETH(optionToken, receiver, weth, PrimitiveRouterLib.getProportionalLongOptions(
+              optionToken,
+              msg.value
+          )
+        )
+      );
     }
 
     /**
@@ -920,69 +929,6 @@ contract PrimitiveRouter is
 
     // ===== Flash Functions =====
 
-    function _flashMintShortOptionsThenSwap(
-        address optionAddress,
-        uint256 flashLoanQuantity,
-        address to
-    ) internal returns (uint256) {
-        // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of underlyingTokens.
-        address underlyingToken =
-            IOption(optionAddress).getUnderlyingTokenAddress();
-        address redeemToken = IOption(optionAddress).redeemToken();
-        address pairAddress = factory.getPair(underlyingToken, redeemToken);
-
-        // Mint longOptionTokens using the underlyingTokens received from UniswapV2 flash swap to this contract.
-        // Send underlyingTokens from this contract to the optionToken contract, then call mintOptions.
-        IERC20(underlyingToken).safeTransfer(optionAddress, flashLoanQuantity);
-        // Mint longOptionTokens using the underlyingTokens received from UniswapV2 flash swap to this contract.
-        // Send underlyingTokens from this contract to the optionToken contract, then call mintOptions.
-        (uint256 mintedOptions, uint256 mintedRedeems) =
-            IOption(optionAddress).mintOptions(address(this));
-
-        // The loanRemainder will be the amount of underlyingTokens that are needed from the original
-        // transaction caller in order to pay the flash swap.
-        // IMPORTANT: THIS IS EFFECTIVELY THE PREMIUM PAID IN UNDERLYINGTOKENS TO PURCHASE THE OPTIONTOKEN.
-        uint256 loanRemainder;
-
-        // Economically, negativePremiumPaymentInRedeems value should always be 0.
-        // In the case that we minted more redeemTokens than are needed to pay back the flash swap,
-        // (short -> underlying is a positive trade), there is an effective negative premium.
-        // In that case, this function will send out `negativePremiumAmount` of redeemTokens to the original caller.
-        // This means the user gets to keep the extra redeemTokens for free.
-        // Negative premium amount is the opposite difference of the loan remainder: (paid - flash loan amount)
-        uint256 negativePremiumPaymentInRedeems;
-        (loanRemainder, negativePremiumPaymentInRedeems) = PrimitiveRouterLib.getOpenPremium(
-            router,
-            IOption(optionAddress),
-            flashLoanQuantity
-        );
-
-        // In the case that more redeemTokens were minted than need to be sent back as payment,
-        // calculate the new mintedRedeems value to send to the pair
-        // (don't send all the minted redeemTokens).
-        if (negativePremiumPaymentInRedeems > 0) {
-            mintedRedeems = mintedRedeems.sub(negativePremiumPaymentInRedeems);
-        }
-
-        // In most cases, all of the minted redeemTokens will be sent to the pair as payment for the flash swap.
-        if (mintedRedeems > 0) {
-            IERC20(redeemToken).safeTransfer(pairAddress, mintedRedeems);
-        }
-
-        // If negativePremiumAmount is non-zero and non-negative, send redeemTokens to the `to` address.
-        if (negativePremiumPaymentInRedeems > 0) {
-            IERC20(redeemToken).safeTransfer(
-                to,
-                negativePremiumPaymentInRedeems
-            );
-        }
-
-        // Send minted longOptionTokens (option) to the original msg.sender.
-        IERC20(optionAddress).safeTransfer(to, flashLoanQuantity);
-        emit FlashOpened(msg.sender, flashLoanQuantity, loanRemainder);
-        return loanRemainder;
-    }
-
     /**
      * @dev     Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
      *          shortOptionTokens and underlyingTokens.
@@ -1013,10 +959,12 @@ contract PrimitiveRouter is
         address pairAddress = factory.getPair(underlyingToken, redeemToken);
 
         uint256 loanRemainder =
-            _flashMintShortOptionsThenSwap(
+            PrimitiveRouterLib._flashMintShortOptionsThenSwap(
                 optionAddress,
                 flashLoanQuantity,
-                to
+                to,
+                factory,
+                router
             );
 
         // If loanRemainder is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
@@ -1063,10 +1011,12 @@ contract PrimitiveRouter is
         address pairAddress = factory.getPair(underlyingToken, redeemToken);
 
         uint256 loanRemainder =
-            _flashMintShortOptionsThenSwap(
+            PrimitiveRouterLib._flashMintShortOptionsThenSwap(
                 optionAddress,
                 flashLoanQuantity,
-                to
+                to,
+                factory,
+                router
             );
         // If loanRemainder is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
         if (loanRemainder > 0) {
