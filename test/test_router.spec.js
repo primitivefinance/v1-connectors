@@ -382,7 +382,11 @@ describe('PrimitiveRouter', () => {
       )
 
       await primitiveRouter.addShortLiquidityWithUnderlying(
-        optionAddress,
+        underlyingToken.address,
+        strikeToken.address,
+        base,
+        quote,
+        expiry,
         amountOptions,
         amountBDesired,
         amountBMin,
@@ -439,7 +443,11 @@ describe('PrimitiveRouter', () => {
 
       await expect(
         primitiveRouter.addShortLiquidityWithUnderlying(
-          optionAddress,
+          underlyingToken.address,
+          strikeToken.address,
+          base,
+          quote,
+          expiry,
           amountOptions,
           amountBDesired.add(1),
           amountBMin.add(1),
@@ -480,7 +488,11 @@ describe('PrimitiveRouter', () => {
 
       await expect(
         primitiveRouter.addShortLiquidityWithUnderlying(
-          optionAddress,
+          underlyingToken.address,
+          strikeToken.address,
+          base,
+          quote,
+          expiry,
           amountOptions,
           amountBDesired.sub(1),
           amountBMin,
