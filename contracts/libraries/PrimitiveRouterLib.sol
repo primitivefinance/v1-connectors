@@ -31,10 +31,19 @@ pragma solidity ^0.6.2;
 import {
     IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import {
+    IUniswapV2Factory
+} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
+import {
+    IUniswapV2Pair
+} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 // Primitive
 import {
     IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol";
+import {
+  IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 import {
     TraderLib,
     IERC20
@@ -43,9 +52,7 @@ import {IWETH} from "../interfaces/IWETH.sol";
 // Open Zeppelin
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-  IRegistry
-} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
+
 
 library PrimitiveRouterLib {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
@@ -254,6 +261,28 @@ library PrimitiveRouterLib {
                 exerciseQuantity,
                 new bytes(0)
             );
+    }
+
+    function _swapForUnderlying(
+        IOption optionToken,
+        uint256 amountOptions,
+        bytes memory params,
+        IUniswapV2Factory factory
+    ) internal {
+        address redeemToken = optionToken.redeemToken();
+        address underlyingToken = optionToken.getUnderlyingTokenAddress();
+        IUniswapV2Pair pair =
+            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
+
+        // Receives 0 quoteTokens and `amountOptions` of underlyingTokens to `this` contract address.
+        // Then executes `flashMintShortOptionsThenSwap`.
+        uint256 amount0Out =
+            pair.token0() == underlyingToken ? amountOptions : 0;
+        uint256 amount1Out =
+            pair.token0() == underlyingToken ? 0 : amountOptions;
+
+        // Borrow the amountOptions quantity of underlyingTokens and execute the callback function using params.
+        pair.swap(amount0Out, amount1Out, address(this), params);
     }
 
     /**

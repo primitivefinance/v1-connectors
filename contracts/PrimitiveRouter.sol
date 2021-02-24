@@ -392,7 +392,7 @@ contract PrimitiveRouter is
                 maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
                 msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
             );
-        _swapForUnderlying(optionToken, amountOptions, params);
+        PrimitiveRouterLib._swapForUnderlying(optionToken, amountOptions, params, factory);
         return true;
     }
 
@@ -427,7 +427,7 @@ contract PrimitiveRouter is
                 maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
                 msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
             );
-        _swapForUnderlying(optionToken, amountOptions, params);
+        PrimitiveRouterLib._swapForUnderlying(optionToken, amountOptions, params, factory);
         return true;
     }
 
@@ -495,27 +495,6 @@ contract PrimitiveRouter is
             );
         _swapForRedeem(optionToken, amountRedeems, params);
         return true;
-    }
-
-    function _swapForUnderlying(
-        IOption optionToken,
-        uint256 amountOptions,
-        bytes memory params
-    ) internal {
-        address redeemToken = optionToken.redeemToken();
-        address underlyingToken = optionToken.getUnderlyingTokenAddress();
-        IUniswapV2Pair pair =
-            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
-
-        // Receives 0 quoteTokens and `amountOptions` of underlyingTokens to `this` contract address.
-        // Then executes `flashMintShortOptionsThenSwap`.
-        uint256 amount0Out =
-            pair.token0() == underlyingToken ? amountOptions : 0;
-        uint256 amount1Out =
-            pair.token0() == underlyingToken ? 0 : amountOptions;
-
-        // Borrow the amountOptions quantity of underlyingTokens and execute the callback function using params.
-        pair.swap(amount0Out, amount1Out, address(this), params);
     }
 
     function _swapForRedeem(
