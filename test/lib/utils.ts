@@ -1,5 +1,5 @@
-const { assert, expect } = require('chai')
-const { ethers } = require('hardhat')
+import { assert, expect } from 'chai'
+import { ethers } from 'hardhat'
 const { parseEther } = ethers.utils
 const { AddressZero } = ethers.constants
 
@@ -9,7 +9,7 @@ const { AddressZero } = ethers.constants
  * @param {*} spender The signer account that should be approved.
  * @param {*} token The ERC-20 token to update its allowance mapping.
  */
-const checkAllowance = async (owner, spender, token) => {
+export const checkAllowance = async (owner, spender, token) => {
   const amount = parseEther('10000000000')
   let allowance = await token.allowance(owner.address, spender.address)
   if (allowance <= amount) {
@@ -23,7 +23,7 @@ const checkAllowance = async (owner, spender, token) => {
  * @param {*} optionFactory The OptionFactory contract instance.
  * @param {*} redeemFactory The RedeemFactory contract instance.
  */
-const checkInitialization = async (registry, optionFactory, redeemFactory) => {
+export const checkInitialization = async (registry, optionFactory, redeemFactory) => {
   const optionFactoryAddress = await registry.optionFactory()
   const redeemFactoryAddress = await registry.redeemFactory()
   if (optionFactoryAddress == AddressZero) {
@@ -34,12 +34,12 @@ const checkInitialization = async (registry, optionFactory, redeemFactory) => {
   }
 }
 
-const assertBNEqual = (actualBN, expectedBN, message) => {
+export const assertBNEqual = (actualBN, expectedBN, message?) => {
   assert.equal(actualBN.toString(), expectedBN.toString(), message)
 }
 
-const assertWithinError = (actualBN, expectedBN, message) => {
-  error = 1
+export const assertWithinError = (actualBN, expectedBN, message?) => {
+  let error = 1
   if (expectedBN !== 0) {
     let max = expectedBN.add(expectedBN.div(error))
     let min = expectedBN.sub(expectedBN.div(error))
@@ -59,7 +59,7 @@ const assertWithinError = (actualBN, expectedBN, message) => {
  * @param {*} token The ERC-20 token contract instance.
  * @param {*} address The address of the account to check the balance of.
  */
-const getTokenBalance = async (token, address) => {
+export const getTokenBalance = async (token, address) => {
   let bal = await token.balanceOf(address)
   return bal
 }
@@ -72,7 +72,7 @@ const getTokenBalance = async (token, address) => {
  * @param {*} optionToken The contract instance of the option token.
  * @param {*} redeem The contract instance of the redeem token.
  */
-const verifyOptionInvariants = async (underlyingToken, strikeToken, optionToken, redeem) => {
+export const verifyOptionInvariants = async (underlyingToken, strikeToken, optionToken, redeem) => {
   let underlyingBalance = await underlyingToken.balanceOf(optionToken.address)
   let underlyingCache = await optionToken.underlyingCache()
   let strikeCache = await optionToken.strikeCache()
@@ -93,7 +93,7 @@ const verifyOptionInvariants = async (underlyingToken, strikeToken, optionToken,
  * @param {*} Primitive An object returned by the ../lib/setup function `newPrimitive()`
  * @param {*} address The address to check the balance of.
  */
-const getTokenBalances = async (Primitive, address) => {
+export const getTokenBalances = async (Primitive, address) => {
   const underlyingBalance = await getTokenBalance(Primitive.underlyingToken, address)
   const strikeBalance = await getTokenBalance(Primitive.strikeToken, address)
   const redeemBalance = await getTokenBalance(Primitive.redeemToken, address)
@@ -108,18 +108,7 @@ const getTokenBalances = async (Primitive, address) => {
   return tokenBalances
 }
 
-const sortTokens = (tokenA, tokenB) => {
+export const sortTokens = (tokenA, tokenB) => {
   let tokens = tokenA < tokenB ? [tokenA, tokenB] : [tokenB, tokenA]
   return tokens
-}
-
-module.exports = {
-  sortTokens,
-  assertBNEqual,
-  verifyOptionInvariants,
-  getTokenBalances,
-  getTokenBalance,
-  checkAllowance,
-  checkInitialization,
-  assertWithinError,
 }

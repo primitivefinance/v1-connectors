@@ -92,18 +92,4 @@ interface IPrimitiveRouter {
     function router() external view returns (IUniswapV2Router02);
 
     function factory() external view returns (IUniswapV2Factory);
-
-    function getName() external pure returns (string memory);
-
-    function getVersion() external pure returns (uint8);
-
-    function getOpenPremium(IOption optionToken, uint256 quantityLong)
-        external
-        view
-        returns (uint256, uint256);
-
-    function getClosePremium(IOption optionToken, uint256 quantityShort)
-        external
-        view
-        returns (uint256, uint256);
 }
