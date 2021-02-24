@@ -196,6 +196,15 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public nonZero(redeemQuantity) returns (uint256) {
+      require(
+        address(optionToken) == registry.getOptionAddress(
+          optionToken.getUnderlyingTokenAddress(),
+          optionToken.getStrikeTokenAddress(),
+          optionToken.getBaseValue(),
+          optionToken.getQuoteValue(),
+          optionToken.getExpiryTime()
+        ),
+        "INVALID_OPTION");
         IERC20(optionToken.redeemToken()).safeTransferFrom(
             msg.sender,
             address(optionToken),
