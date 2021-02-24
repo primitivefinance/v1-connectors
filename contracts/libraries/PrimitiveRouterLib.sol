@@ -285,6 +285,31 @@ library PrimitiveRouterLib {
         pair.swap(amount0Out, amount1Out, address(this), params);
     }
 
+    function _swapForRedeem(
+        IOption optionToken,
+        uint256 amountRedeems,
+        bytes memory params,
+        IUniswapV2Factory factory
+    ) internal {
+        address redeemToken = optionToken.redeemToken();
+        address underlyingToken = optionToken.getUnderlyingTokenAddress();
+        IUniswapV2Pair pair =
+            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
+
+        // Build the path to get the appropriate reserves to borrow from, and then pay back.
+        // We are borrowing from reserve1 then paying it back mostly in reserve0.
+        // Borrowing redeemTokens, paying back in underlyingTokens (normal swap).
+        // Pay any remainder in underlyingTokens.
+
+        // Receives 0 underlyingTokens and `amountRedeems` of redeemTokens to `this` contract address.
+        // Then executes `flashCloseLongOptionsThenSwap`.
+        uint256 amount0Out = pair.token0() == redeemToken ? amountRedeems : 0;
+        uint256 amount1Out = pair.token0() == redeemToken ? 0 : amountRedeems;
+
+        // Borrow the amountRedeems quantity of redeemTokens and execute the callback function using params.
+        pair.swap(amount0Out, amount1Out, address(this), params);
+    }
+
     /**
      * @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
      * @param  router The UniswapV2Router02 contract.
