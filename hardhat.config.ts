@@ -1,26 +1,32 @@
 // == Libraries ==
-const path = require('path')
-const bip39 = require('bip39')
-const crypto = require('crypto')
-const ethers = require('ethers')
-require('dotenv').config()
+import path from 'path'
+import bip39 from 'bip39'
+import crypto from 'crypto'
+import ethers from 'ethers'
+import { config as dotenvConfig } from 'dotenv'
+import { resolve } from 'path'
+import { HardhatUserConfig } from 'hardhat/config'
+dotenvConfig({ path: resolve(__dirname, './.env') })
 
 // == Plugins ==
-require('@nomiclabs/hardhat-etherscan')
-require('@nomiclabs/hardhat-waffle')
-require('hardhat-deploy')
-require('hardhat-gas-reporter')
-require('solidity-coverage')
+import '@nomiclabs/hardhat-etherscan'
+import '@nomiclabs/hardhat-waffle'
+import 'hardhat-deploy'
+import 'hardhat-gas-reporter'
+import 'solidity-coverage'
+import 'prettier-plugin-solidity'
 
 // == Environment ==
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20).toString('base64')
-const rinkeby = process.env.RINKEBY || new ethers.providers.InfuraProvider('rinkeby').connection.url
-const mainnet = process.env.MAINNET || new ethers.providers.InfuraProvider('mainnet').connection.url
-const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
-const live = process.env.MNEMONIC || mnemonic
+//const rinkeby = process.env.RINKEBY || new ethers.providers.InfuraProvider('rinkeby').connection.url
+//const mainnet = process.env.MAINNET || new ethers.providers.InfuraProvider('mainnet').connection.url
+//const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
+//const live = process.env.MNEMONIC || mnemonic
 
 // == hardhat Config ==
-Object.assign(module.exports, {
+
+const config: HardhatUserConfig = {
+  defaultNetwork: 'hardhat',
   networks: {
     coverage: {
       url: 'http://localhost:8555',
@@ -31,7 +37,7 @@ Object.assign(module.exports, {
       gasPrice: 80000000000,
       timeout: 1000000,
     },
-    live: {
+    /* live: {
       url: mainnet,
       accounts: {
         mnemonic: live,
@@ -39,23 +45,20 @@ Object.assign(module.exports, {
       chainId: 1,
       from: '0xaF31D3C2972F62Eb08F96a1Fe29f579d61b4294D',
       gasPrice: 30000000000,
-    },
-    rinkeby: {
+    }, */
+    /* rinkeby: {
       url: rinkeby,
       accounts: {
         mnemonic: mnemonic,
       },
       chainId: 4,
-    },
+    }, */
   },
   mocha: {
     timeout: 100000000,
-    useColors: true,
   },
   etherscan: {
-    url: 'https://api-rinkeby.etherscan.io/api',
     apiKey: ETHERSCAN_API_KEY,
-    etherscanApiKey: ETHERSCAN_API_KEY,
   },
   gasReporter: {
     currency: 'USD',
@@ -63,13 +66,26 @@ Object.assign(module.exports, {
     enabled: true,
   },
   solidity: {
-    version: '0.6.2',
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
+    compilers: [
+      {
+        version: '0.7.1',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
       },
-    },
+      {
+        version: '0.6.2',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    ],
   },
   namedAccounts: {
     deployer: {
@@ -85,4 +101,6 @@ Object.assign(module.exports, {
     deploy: path.join(__dirname, 'deploy'),
     deployments: path.join(__dirname, 'deployments'),
   },
-})
+}
+
+export default config

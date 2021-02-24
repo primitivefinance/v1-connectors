@@ -1,16 +1,16 @@
 // Testing suite tools
-const { assert, expect } = require('chai')
-const chai = require('chai')
-const { solidity } = require('ethereum-waffle')
+import chai, { assert, expect } from 'chai'
+import { solidity } from 'ethereum-waffle'
 chai.use(solidity)
+import { ethers, waffle } from 'hardhat'
 
 // Convert to wei
-const { parseEther } = require('ethers/lib/utils')
+import { parseEther } from 'ethers/lib/utils'
 
 // Helper functions and constants
-const utils = require('./lib/utils')
-const setup = require('./lib/setup')
-const constants = require('./lib/constants')
+import * as utils from './lib/utils'
+import * as setup from './lib/setup'
+import constants from './lib/constants'
 const { assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 
 const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = constants.VALUES
@@ -28,7 +28,9 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
   let underlyingToken, strikeToken, base, quote, expiry
 
   // Periphery and Administrative contracts
-  let registry, primitiveRouter
+  let registry, primitiveRouter, Primitive
+
+  let safeMintWithETH, safeExerciseForETH, safeCloseForETH
 
   before(async () => {
     let signers = await setup.newWallets()
@@ -161,7 +163,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await safeMintWithETH(parseEther('5'))
     })
 
-    safeExerciseForETH = async (inputUnderlyings) => {
+    const safeExerciseForETH = async (inputUnderlyings) => {
       // Options:Underlyings are always at a 1:1 ratio.
       let inputOptions = inputUnderlyings
       // Calculate the amount of strike tokens necessary to exercise
@@ -194,7 +196,9 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
 
     it('should revert if user does not have enough optionToken tokens', async () => {
       // Fails early by checking the user's optionToken balance against the quantity of options they wish to exercise.
-      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
+      await expect(primitiveRouter.safeExerciseForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(
+        ERC20_TRANSFER_AMOUNT
+      )
     })
 
     it('should revert if user does not have enough strike tokens', async () => {
@@ -206,9 +210,9 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       // Send the strikeTokens that Bob owns to Alice, so that Bob has 0 strikeTokens.
       await strikeToken.connect(User).transfer(Alice, await strikeToken.balanceOf(Bob))
       // Attempting to exercise an option without having enough strikeTokens will cause a revert.
-      await expect(primitiveRouter.connect(User).safeExerciseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
-        ERC20_TRANSFER_AMOUNT
-      )
+      await expect(
+        primitiveRouter.connect(User).safeExerciseForETH(optionToken.address, parseEther('0.1'), Bob)
+      ).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
     })
 
     it('should exercise consecutively', async () => {
@@ -225,7 +229,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await safeMintWithETH(parseEther('1'))
     })
 
-    safeCloseForETH = async (inputOptions) => {
+    const safeCloseForETH = async (inputOptions) => {
       let inputRedeems = inputOptions.mul(quote).div(base)
 
       // The balance of the user we are checking before and after is their ether balance.
@@ -263,9 +267,9 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await redeemToken.connect(User).transfer(Alice, await redeemToken.balanceOf(Bob))
 
       // Attempting to close options without enough redeemTokens will cause a revert.
-      await expect(primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
-        ERC20_TRANSFER_AMOUNT
-      )
+      await expect(
+        primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)
+      ).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
     })
 
     it('should revert if user does not have enough optionToken tokens', async () => {
@@ -278,9 +282,9 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await optionToken.connect(User).transfer(Alice, await optionToken.balanceOf(Bob))
 
       // Attempting to close a quantity of options that msg.sender does not have will cause a revert.
-      await expect(primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)).to.be.revertedWith(
-        ERC20_TRANSFER_AMOUNT
-      )
+      await expect(
+        primitiveRouter.connect(User).safeCloseForETH(optionToken.address, parseEther('0.1'), Bob)
+      ).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
     })
 
     it('should close consecutively', async () => {
@@ -355,7 +359,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
       await redeemToken.approve(primitiveRouter.address, MILLION_ETHER)
     })
 
-    safeRedeemForETH = async (inputRedeems) => {
+    const safeRedeemForETH = async (inputRedeems) => {
       let outputStrikes = inputRedeems
 
       let redeemBal = await getTokenBalance(redeemToken, Alice)
@@ -382,14 +386,18 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
 
     it('should revert if user does not have enough redeemToken tokens', async () => {
       // Fails early if the user is attempting to redeem tokens that they don't have.
-      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(ERC20_TRANSFER_AMOUNT)
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, MILLION_ETHER, Alice)).to.be.revertedWith(
+        ERC20_TRANSFER_AMOUNT
+      )
     })
 
     it('should revert if contract does not have enough strike tokens', async () => {
       // If option tokens are not exercised, then no strikeTokens are stored in the option contract.
       // If no strikeTokens are stored in the contract, redeemTokens cannot be utilized until:
       // options are exercised, or become expired.
-      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith("ERR_BAL_STRIKE")
+      await expect(primitiveRouter.safeRedeemForETH(optionToken.address, parseEther('0.1'), Alice)).to.be.revertedWith(
+        'ERR_BAL_STRIKE'
+      )
     })
 
     it('should redeemToken consecutively', async () => {
@@ -403,7 +411,7 @@ describe('PrimitiveRouter: Eth Abstraction', () => {
   })
 
   describe('safeExerciseWithETH', () => {
-    safeExerciseWithETH = async (inputUnderlyings) => {
+    const safeExerciseWithETH = async (inputUnderlyings) => {
       // Options:Underlyings are always at a 1:1 ratio.
       let inputOptions = inputUnderlyings
       // Calculate the amount of strike tokens necessary to exercise

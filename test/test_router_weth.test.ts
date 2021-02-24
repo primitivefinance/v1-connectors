@@ -1,20 +1,28 @@
-const { assert, expect } = require('chai')
-const chai = require('chai')
-const { solidity } = require('ethereum-waffle')
+import { assert, expect } from 'chai'
+import chai from 'chai'
+import { solidity } from 'ethereum-waffle'
 chai.use(solidity)
-const utils = require('./lib/utils')
-const setup = require('./lib/setup')
-const constants = require('./lib/constants')
-const { parseEther, formatEther } = require('ethers/lib/utils')
+import * as utils from './lib/utils'
+import * as setup from './lib/setup'
+import constants from './lib/constants'
+import { parseEther, formatEther } from 'ethers/lib/utils'
+import UniswapV2Pair from '@uniswap/v2-core/build/UniswapV2Pair.json'
+import batchApproval from './lib/batchApproval'
+import { sortTokens } from './lib/utils'
+import { BigNumber, BigNumberish } from 'ethers'
+import { ethers, waffle } from 'hardhat'
 const { assertBNEqual } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
-const { ERC20_TRANSFER_AMOUNT }= constants.ERR_CODES
-const UniswapV2Pair = require('@uniswap/v2-core/build/UniswapV2Pair.json')
-const batchApproval = require('./lib/batchApproval')
-const { sortTokens } = require('./lib/utils')
-const { BigNumber } = require('ethers')
+const { ERC20_TRANSFER_AMOUNT } = constants.ERR_CODES
 
-const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
+const _addLiquidity = async (
+  router,
+  reserves,
+  amountADesired,
+  amountBDesired,
+  amountAMin,
+  amountBMin
+): Promise<BigNumberish[]> => {
   let amountA, amountB
   let amountBOptimal = await router.quote(amountADesired, reserves[0], reserves[1])
   if (amountBOptimal <= amountBDesired) {
@@ -91,19 +99,19 @@ const getPremium = (quantityOptions, base, quote, redeemToken, underlyingToken, 
 }
 
 const getBalance = async (signer, address) => {
-  return await (signer.provider).getBalance(address)
+  return await signer.provider.getBalance(address)
 }
 
 describe('PrimitiveRouter for WETH', () => {
   // ACCOUNTS
-  let Admin, User, Alice
+  let Admin, User, Alice, Bob
 
   let trader, weth, dai, optionToken, redeemToken, quoteToken
   let underlyingToken, strikeToken
   let base, quote, expiry
   let Primitive, registry
   let uniswapFactory, uniswapRouter, primitiveRouter
-  let premium
+  let premium, assertInvariant, reserves, reserve0, reserve1
   // regular deadline
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
@@ -158,7 +166,12 @@ describe('PrimitiveRouter for WETH', () => {
     trader = await setup.newTrader(Admin, weth.address)
 
     // Uniswap Connector contract
-    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, uniswapRouter.address, uniswapFactory.address, registry.address])
+    primitiveRouter = await setup.newTestRouter(Admin, [
+      weth.address,
+      uniswapRouter.address,
+      uniswapFactory.address,
+      registry.address,
+    ])
 
     // Approve all tokens and contracts
     await batchApproval(
@@ -182,23 +195,18 @@ describe('PrimitiveRouter for WETH', () => {
     //await weth.deposit({ from: Alice, value: parseEther('50') })
 
     // MINT 1,000 OPTIONS
-    await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions})
+    await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions })
 
     // Mint some options for tests
-    await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: parseEther('0.1')})
+    await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: parseEther('0.1') })
 
     // MINT 210,000 DAI
     await dai.mint(Alice, totalDai)
 
     // Add liquidity to redeem <> weth pair
-    await uniswapRouter.addLiquidityETH(
-      redeemToken.address,
-      totalRedeemForPair,
-      0,
-      0,
-      Alice,
-      deadline,
-    {value: totalRedeemForPair.mul(base).div(quote)})
+    await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+      value: totalRedeemForPair.mul(base).div(quote),
+    })
   })
 
   describe('public variables', () => {
@@ -416,11 +424,7 @@ describe('PrimitiveRouter for WETH', () => {
       redeemToken = Primitive.redeemToken
 
       // Approve all tokens and contracts
-      await batchApproval(
-        [primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
+      await batchApproval([primitiveRouter.address, uniswapRouter.address], [optionToken, redeemToken], [Admin])
 
       premium = 10
 
@@ -428,17 +432,12 @@ describe('PrimitiveRouter for WETH', () => {
       const ratio = 1050
       const totalOptions = parseEther('20')
       const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions.add(parseEther('10'))})
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions.add(parseEther('10')) })
 
       // Add liquidity to redeem <> weth pair
-      await uniswapRouter.addLiquidityETH(
-        redeemToken.address,
-        totalRedeemForPair,
-        0,
-        0,
-        Alice,
-        deadline
-      , {value: totalOptions})
+      await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+        value: totalOptions,
+      })
     })
 
     it('should mint Primitive V1 Options then flashCloseLong the long option tokens', async () => {
@@ -454,7 +453,9 @@ describe('PrimitiveRouter for WETH', () => {
       // transfersFrom underlyingToken `optionsToMint` amount to mint options. Then swaps in unsiwap pair
       // for underlying tokens.
       // change = (-optionsToMint + amoutOutMin)
-      await expect(primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, minPayout[0], {value: optionsToMint}))
+      await expect(
+        primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, minPayout[0], { value: optionsToMint })
+      )
         .to.emit(primitiveRouter, 'WroteOption')
         .withArgs(Alice, optionsToMint)
 
@@ -468,7 +469,7 @@ describe('PrimitiveRouter for WETH', () => {
 
       assertBNEqual(redeemChange, amountIn)
       assert.equal(
-        parseFloat(underlyingChange) === 0,// should fix with checking eth balminPayout[0].add(optionsToMint.mul(-1)),
+        parseFloat(underlyingChange) === 0, // should fix with checking eth balminPayout[0].add(optionsToMint.mul(-1)),
         true,
         `underlyingDelta ${formatEther(underlyingChange)} != minPayout ${formatEther(minPayout[0])}`
       )
@@ -482,7 +483,7 @@ describe('PrimitiveRouter for WETH', () => {
 
       // Call the function
       await expect(
-        primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, amountOutMin, {value: optionsToMint})
+        primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, amountOutMin, { value: optionsToMint })
       ).to.be.revertedWith('ERR_ZERO')
     })
 
@@ -491,8 +492,9 @@ describe('PrimitiveRouter for WETH', () => {
       let optionsToMint = parseEther('1')
       let minPayout = '1'
 
-      await expect(primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, minPayout, {value: optionsToMint})).to.be
-        .reverted
+      await expect(
+        primitiveRouter.mintETHOptionsThenFlashCloseLongForETH(optionTokenAddress, minPayout, { value: optionsToMint })
+      ).to.be.reverted
     })
   })
 
@@ -506,11 +508,7 @@ describe('PrimitiveRouter for WETH', () => {
       redeemToken = Primitive.redeemToken
 
       // Approve all tokens and contracts
-      await batchApproval(
-        [primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
+      await batchApproval([primitiveRouter.address, uniswapRouter.address], [optionToken, redeemToken], [Admin])
 
       premium = 10
 
@@ -518,17 +516,12 @@ describe('PrimitiveRouter for WETH', () => {
       const ratio = 1050
       const totalOptions = parseEther('20')
       const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, {value: totalOptions.add(parseEther('10'))})
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions.add(parseEther('10')) })
 
       // Add liquidity to redeem <> weth pair
-      await uniswapRouter.addLiquidityETH(
-        redeemToken.address,
-        totalRedeemForPair,
-        0,
-        0,
-        Alice,
-        deadline
-      , {value: totalOptions})
+      await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+        value: totalOptions,
+      })
     })
 
     it('use underlyings to mint options, then provide short options and underlying tokens as liquidity', async () => {
@@ -539,7 +532,7 @@ describe('PrimitiveRouter for WETH', () => {
       let optionAddress = optionToken.address
       let amountOptions = parseEther('0.1')
       let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
+      let amountBMin: BigNumberish = 0
       let to = Alice
 
       let path = [redeemToken.address, underlyingToken.address]
@@ -566,8 +559,9 @@ describe('PrimitiveRouter for WETH', () => {
         amountBDesired,
         amountBMin,
         to,
-        deadline
-      , {value: amountOptions.add(amountBDesired)})
+        deadline,
+        { value: amountOptions.add(amountBDesired) }
+      )
 
       let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
       let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
@@ -595,7 +589,7 @@ describe('PrimitiveRouter for WETH', () => {
       let amountOptions = parseEther('0.1')
       // skew the amountADesired ratio to be more, so the transaction reverts
       let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
+      let amountBMin: BigNumberish = 0
       let to = Alice
 
       let path = [redeemToken.address, underlyingToken.address]
@@ -621,10 +615,11 @@ describe('PrimitiveRouter for WETH', () => {
           optionAddress,
           amountOptions,
           amountBDesired.add(1),
-          amountBMin.add(1),
+          BigNumber.from(amountBMin).add(1),
           to,
-          deadline
-        , {value: amountOptions.add(amountBDesired.add(1))})
+          deadline,
+          { value: amountOptions.add(amountBDesired.add(1)) }
+        )
       ).to.be.revertedWith('UniswapV2Router: INSUFFICIENT_B_AMOUNT')
     })
 
@@ -636,7 +631,7 @@ describe('PrimitiveRouter for WETH', () => {
       let optionAddress = optionToken.address
       let amountOptions = parseEther('0.1')
       let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
+      let amountBMin: BigNumberish = 0
       let to = Alice
 
       let path = [redeemToken.address, underlyingToken.address]
@@ -664,8 +659,9 @@ describe('PrimitiveRouter for WETH', () => {
           amountBDesired.sub(1),
           amountBMin,
           to,
-          deadline
-        , {value: amountOptions.add(amountBDesired.sub(1))})
+          deadline,
+          { value: amountOptions.add(amountBDesired.sub(1)) }
+        )
       ).to.be.revertedWith('UniswapV2Router: INSUFFICIENT_A_AMOUNT')
     })
   })
@@ -680,11 +676,7 @@ describe('PrimitiveRouter for WETH', () => {
       redeemToken = Primitive.redeemToken
 
       // Approve all tokens and contracts
-      await batchApproval(
-        [primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
+      await batchApproval([primitiveRouter.address, uniswapRouter.address], [optionToken, redeemToken], [Admin])
 
       premium = 10
 
@@ -692,17 +684,12 @@ describe('PrimitiveRouter for WETH', () => {
       const ratio = 1050
       const totalOptions = parseEther('20')
       const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, {value: totalOptions.add(parseEther('10'))})
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions.add(parseEther('10')) })
 
       // Add liquidity to redeem <> weth pair
-      await uniswapRouter.addLiquidityETH(
-        redeemToken.address,
-        totalRedeemForPair,
-        0,
-        0,
-        Alice,
-        deadline
-      , {value: totalOptions})
+      await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+        value: totalOptions,
+      })
     })
 
     it('burns UNI-V2 lp shares, then closes the withdrawn shortTokens', async () => {
@@ -750,10 +737,10 @@ describe('PrimitiveRouter for WETH', () => {
       let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
       let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
 
-      assertBNEqual(underlyingChange.toString(), '0')// check eth balance with this amt + gas: amountAMin.mul(base).div(quote).add(amountBMin))
+      assertBNEqual(underlyingChange.toString(), '0') // check eth balance with this amt + gas: amountAMin.mul(base).div(quote).add(amountBMin))
       assertBNEqual(optionChange.toString(), amountAMin.mul(base).div(quote).mul(-1))
       assertBNEqual(quoteChange.toString(), '0')
-      assert(redeemChange.gt(0) || redeemChange.isZero(), true, `Redeem change is not gt 0`)
+      assert(redeemChange.gt(0) || redeemChange.isZero() == true, `Redeem change is not gt 0`)
     })
   })
 
@@ -767,11 +754,7 @@ describe('PrimitiveRouter for WETH', () => {
       redeemToken = Primitive.redeemToken
 
       // Approve all tokens and contracts
-      await batchApproval(
-        [primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
+      await batchApproval([primitiveRouter.address, uniswapRouter.address], [optionToken, redeemToken], [Admin])
 
       premium = 10
 
@@ -781,18 +764,13 @@ describe('PrimitiveRouter for WETH', () => {
       const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
       /* const totalOptions = '75716450507480110972130'
       const totalRedeemForPair = '286685334476675940449501' */
-      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions})
-      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: parseEther('1000')})
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions })
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: parseEther('1000') })
 
       // Add liquidity to redeem <> weth pair
-      await uniswapRouter.addLiquidityETH(
-        redeemToken.address,
-        totalRedeemForPair,
-        0,
-        0,
-        Alice,
-        deadline
-      , {value: totalOptions})
+      await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+        value: totalOptions,
+      })
     })
 
     it('gets a flash loan for underlyings, mints options, swaps redeem to underlyings to pay back', async () => {
@@ -810,7 +788,9 @@ describe('PrimitiveRouter for WETH', () => {
       let premium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       premium = premium.gt(0) ? premium : parseEther('0')
 
-      await expect(primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, premium.add(10), {value: premium.add(10)}))
+      await expect(
+        primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, premium.add(10), { value: premium.add(10) })
+      )
         .to.emit(primitiveRouter, 'FlashOpened')
         .withArgs(primitiveRouter.address, amountOptions, premium)
 
@@ -828,7 +808,7 @@ describe('PrimitiveRouter for WETH', () => {
       let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
 
       assert.equal(
-        parseFloat(underlyingChange.toString()) ===  0, // fix to check ether bal with this value amountOptions.mul(-1).add(premium),
+        parseFloat(underlyingChange.toString()) === 0, // fix to check ether bal with this value amountOptions.mul(-1).add(premium),
         true,
         `${formatEther(underlyingChange)} ${formatEther(amountOptions)}`
       )
@@ -845,9 +825,11 @@ describe('PrimitiveRouter for WETH', () => {
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
       let maxPremium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       maxPremium = maxPremium.gt(0) ? maxPremium : parseEther('0')
-      await expect(primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, maxPremium.sub(1), {value: maxPremium.sub(1)})).to.be.revertedWith(
-        'ERR_UNISWAPV2_CALL_FAIL'
-      )
+      await expect(
+        primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, maxPremium.sub(1), {
+          value: maxPremium.sub(1),
+        })
+      ).to.be.revertedWith('ERR_UNISWAPV2_CALL_FAIL')
     })
 
     it('should do a normal flash close', async () => {
@@ -862,9 +844,9 @@ describe('PrimitiveRouter for WETH', () => {
     it('should revert with premium over max', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLongForETH(optionToken.address, amountRedeems, amountRedeems)).to.be.revertedWith(
-        'ERR_UNISWAPV2_CALL_FAIL'
-      )
+      await expect(
+        primitiveRouter.closeFlashLongForETH(optionToken.address, amountRedeems, amountRedeems)
+      ).to.be.revertedWith('ERR_UNISWAPV2_CALL_FAIL')
     })
 
     it('should revert flash loan quantity is zero', async () => {
@@ -875,7 +857,9 @@ describe('PrimitiveRouter for WETH', () => {
       let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
 
       await expect(
-        primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, amountOutMin.add(1), {value: amountOutMin.add(1)})
+        primitiveRouter.openFlashLongWithETH(optionToken.address, amountOptions, amountOutMin.add(1), {
+          value: amountOutMin.add(1),
+        })
       ).to.be.revertedWith('INSUFFICIENT_OUTPUT_AMOUNT')
     })
   })
@@ -890,11 +874,7 @@ describe('PrimitiveRouter for WETH', () => {
       redeemToken = Primitive.redeemToken
 
       // Approve all tokens and contracts
-      await batchApproval(
-        [primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
+      await batchApproval([primitiveRouter.address, uniswapRouter.address], [optionToken, redeemToken], [Admin])
 
       premium = 10
 
@@ -902,17 +882,12 @@ describe('PrimitiveRouter for WETH', () => {
       const ratio = 950
       const totalOptions = parseEther('20')
       const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions.add(parseEther('10'))})
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions.add(parseEther('10')) })
 
       // Add liquidity to redeem <> weth pair
-      await uniswapRouter.addLiquidityETH(
-        redeemToken.address,
-        totalRedeemForPair,
-        0,
-        0,
-        Alice,
-        deadline
-      , {value: totalOptions})
+      await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+        value: totalOptions,
+      })
 
       let pair = new ethers.Contract(
         await uniswapFactory.getPair(underlyingToken.address, redeemToken.address),
@@ -934,7 +909,7 @@ describe('PrimitiveRouter for WETH', () => {
 
     it('should flash close a long position at the expense of the user', async () => {
       // Get the pair instance to approve it to the primitiveRouter
-      await weth.deposit({value: parseEther('1')})
+      await weth.deposit({ value: parseEther('1') })
       let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
       let quoteBalanceBefore = await quoteToken.balanceOf(Alice)
       let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
@@ -976,11 +951,7 @@ describe('PrimitiveRouter for WETH', () => {
       redeemToken = Primitive.redeemToken
 
       // Approve all tokens and contracts
-      await batchApproval(
-        [primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
+      await batchApproval([primitiveRouter.address, uniswapRouter.address], [optionToken, redeemToken], [Admin])
 
       premium = 10
 
@@ -988,17 +959,12 @@ describe('PrimitiveRouter for WETH', () => {
       const ratio = 950
       const totalOptions = parseEther('20')
       const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await primitiveRouter.safeMintWithETH(optionToken.address,  Alice, {value: totalOptions.add(parseEther('10'))})
+      await primitiveRouter.safeMintWithETH(optionToken.address, Alice, { value: totalOptions.add(parseEther('10')) })
 
       // Add liquidity to redeem <> weth pair
-      await uniswapRouter.addLiquidityETH(
-        redeemToken.address,
-        totalRedeemForPair,
-        0,
-        0,
-        Alice,
-        deadline
-      , {value: totalOptions})
+      await uniswapRouter.addLiquidityETH(redeemToken.address, totalRedeemForPair, 0, 0, Alice, deadline, {
+        value: totalOptions,
+      })
 
       let pair = new ethers.Contract(
         await uniswapFactory.getPair(underlyingToken.address, redeemToken.address),

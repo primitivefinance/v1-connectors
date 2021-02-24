@@ -1,4 +1,4 @@
-const { parseEther } = require('ethers/lib/utils')
+import { parseEther } from 'ethers/lib/utils'
 const MAX_UINT = parseEther('10000000000000000000000000000000000000')
 
 const batchApproval = async (arrayOfAddresses, arrayOfTokens, arrayOfSigners) => {
@@ -20,4 +20,4 @@ const batchApproval = async (arrayOfAddresses, arrayOfTokens, arrayOfSigners) =>
   }
 }
 
-module.exports = batchApproval
+export default batchApproval

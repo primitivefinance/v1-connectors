@@ -1,17 +1,18 @@
-const { assert, expect } = require('chai')
-const chai = require('chai')
-const { solidity } = require('ethereum-waffle')
+import { assert, expect } from 'chai'
+import chai from 'chai'
+import { solidity } from 'ethereum-waffle'
 chai.use(solidity)
-const utils = require('./lib/utils')
-const setup = require('./lib/setup')
-const constants = require('./lib/constants')
-const { parseEther, formatEther } = require('ethers/lib/utils')
+import * as utils from './lib/utils'
+import * as setup from './lib/setup'
+import constants from './lib/constants'
+import { parseEther, formatEther } from 'ethers/lib/utils'
+import UniswapV2Pair from '@uniswap/v2-core/build/UniswapV2Pair.json'
+import batchApproval from './lib/batchApproval'
+import { sortTokens } from './lib/utils'
+import { BigNumber } from 'ethers'
+import { ethers, waffle } from 'hardhat'
 const { assertBNEqual } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
-const UniswapV2Pair = require('@uniswap/v2-core/build/UniswapV2Pair.json')
-const batchApproval = require('./lib/batchApproval')
-const { sortTokens } = require('./lib/utils')
-const { BigNumber } = require('ethers')
 
 const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
   let amountA, amountB
@@ -91,20 +92,20 @@ const getPremium = (quantityOptions, base, quote, redeemToken, underlyingToken, 
 
 describe('PrimitiveRouter', () => {
   // ACCOUNTS
-  let Admin, User, Alice
+  let Admin, User, Alice, Bob
 
-  let trader, teth, dai, optionToken, redeemToken, quoteToken
+  let trader, teth, dai, optionToken, redeemToken, quoteToken, weth
   let underlyingToken, strikeToken
   let base, quote, expiry
   let Primitive, registry
   let uniswapFactory, uniswapRouter, primitiveRouter
-  let premium
+  let premium, assertInvariant, reserves, reserve0, reserve1
   // regular deadline
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
   assertInvariant = async () => {
-    if(typeof optionToken === 'undefined') {
-      return;
+    if (typeof optionToken === 'undefined') {
+      return
     }
     assertBNEqual(await optionToken.balanceOf(primitiveRouter.address), '0')
     assertBNEqual(await redeemToken.balanceOf(primitiveRouter.address), '0')
@@ -157,7 +158,12 @@ describe('PrimitiveRouter', () => {
     trader = await setup.newTrader(Admin, teth.address)
 
     // Uniswap Connector contract
-    primitiveRouter = await setup.newTestRouter(Admin, [weth.address, uniswapRouter.address, uniswapFactory.address, registry.address])
+    primitiveRouter = await setup.newTestRouter(Admin, [
+      weth.address,
+      uniswapRouter.address,
+      uniswapFactory.address,
+      registry.address,
+    ])
 
     // Approve all tokens and contracts
     await batchApproval(
@@ -442,7 +448,7 @@ describe('PrimitiveRouter', () => {
           optionAddress,
           amountOptions,
           amountBDesired.add(1),
-          amountBMin.add(1),
+          BigNumber.from(amountBMin).add(1),
           to,
           deadline
         )
@@ -576,7 +582,7 @@ describe('PrimitiveRouter', () => {
       assertBNEqual(underlyingChange.toString(), amountAMin.mul(base).div(quote).add(amountBMin))
       assertBNEqual(optionChange.toString(), amountAMin.mul(base).div(quote).mul(-1))
       assertBNEqual(quoteChange.toString(), '0')
-      assert(redeemChange.gt(0) || redeemChange.isZero(), true, `Redeem change is not gt 0`)
+      assert(redeemChange.gt(0) || redeemChange.isZero() == true, `Redeem change is not gt 0`)
     })
   })
 
