@@ -78,6 +78,7 @@ library PrimitiveRouterLib {
     );
 
     event FlashOpened(address indexed from, uint256 quantity, uint256 premium); // Emmitted on flash opening a long position
+    event FlashClosed(address indexed from, uint256 quantity, uint256 payout);
 
     function realOption(
       IOption option,
@@ -94,6 +95,90 @@ library PrimitiveRouterLib {
         &&
         address(option) != address(0)
       );
+    }
+
+    function _closeOptions(
+      address optionAddress,
+      uint256 flashLoanQuantity,
+      uint256 minPayout,
+      address to,
+      IUniswapV2Factory factory,
+      IUniswapV2Router02 router
+    ) internal returns (uint256) {
+      // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of redeemTokens.
+      // We are flash swapping from an underlying <> shortOptionToken pair,
+      // paying back a portion using underlyingTokens received from closing options.
+      // In the flash open, we did redeemTokens to underlyingTokens.
+      // In the flash close, we are doing underlyingTokens to redeemTokens and keeping the remainder.
+
+      // Close longOptionTokens using the redeemToken balance of this contract.
+      IERC20(IOption(optionAddress).redeemToken()).safeTransfer(optionAddress, flashLoanQuantity);
+
+      // Send out the required amount of options from the `to` address.
+      // WARNING: CALLS TO UNTRUSTED ADDRESS.
+      if (IOption(optionAddress).getExpiryTime() >= now)
+        IERC20(optionAddress).safeTransferFrom(
+            to,
+            optionAddress,
+            getProportionalLongOptions(
+                IOption(optionAddress),
+                flashLoanQuantity
+            )
+      );
+
+      // Close the options.
+      // Quantity of underlyingTokens this contract receives from burning option + redeem tokens.
+      (, , uint256 outputUnderlyings) =
+        IOption(optionAddress).closeOptions(address(this));
+      return(outputUnderlyings);
+    }
+
+    function repayFlashSwap(
+        address optionAddress,
+        uint256 flashLoanQuantity,
+        uint256 minPayout,
+        address to,
+        uint256 outputUnderlyings,
+        IUniswapV2Factory factory,
+        IUniswapV2Router02 router
+    ) internal returns (uint256, uint256) {
+        // Loan Remainder is the cost to pay out, should be 0 in most cases.
+        // Underlying Payout is the `premium` that the original caller receives in underlyingTokens.
+        // It's the remainder of underlyingTokens after the pair has been paid back underlyingTokens for the
+        // flash swapped shortOptionTokens.
+        (uint256 underlyingPayout, uint256 loanRemainder) =
+            PrimitiveRouterLib.getClosePremium(router, IOption(optionAddress), flashLoanQuantity);
+
+        // In most cases there will be an underlying payout, which is subtracted from the outputUnderlyings.
+        if (underlyingPayout > 0) {
+            outputUnderlyings = outputUnderlyings.sub(underlyingPayout);
+        }
+
+        // Pay back the pair in underlyingTokens.
+        if (outputUnderlyings > 0) {
+            IERC20(IOption(optionAddress).getUnderlyingTokenAddress()).safeTransfer(
+                factory.getPair(IOption(optionAddress).getUnderlyingTokenAddress(), IOption(optionAddress).redeemToken()),
+                outputUnderlyings
+            );
+        }
+
+        // If loanRemainder is non-zero and non-negative, send underlyingTokens to the pair as payment (premium).
+        if (loanRemainder > 0) {
+            // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
+            // Revert if the minPayout is less than or equal to the underlyingPayment of 0.
+            // There is 0 underlyingPayment in the case that loanRemainder > 0.
+            // This code branch can be successful by setting `minPayout` to 0.
+            // This means the user is willing to pay to close the position.
+            require(minPayout <= underlyingPayout, "ERR_NEGATIVE_PAYOUT");
+            IERC20(IOption(optionAddress).getUnderlyingTokenAddress()).safeTransferFrom(
+                to,
+                factory.getPair(IOption(optionAddress).getUnderlyingTokenAddress(), IOption(optionAddress).redeemToken()),
+                loanRemainder
+            );
+        }
+
+        emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
+        return (outputUnderlyings, underlyingPayout);
     }
 
     function _flashMintShortOptionsThenSwap(

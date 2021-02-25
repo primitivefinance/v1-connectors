@@ -1029,84 +1029,6 @@ contract PrimitiveRouter is
         return (flashLoanQuantity, loanRemainder);
     }
 
-    function _flashCloseLongOptionsThenSwap(
-        address optionAddress,
-        uint256 flashLoanQuantity,
-        uint256 minPayout,
-        address to
-    ) internal returns (uint256, uint256) {
-        address underlyingToken =
-            IOption(optionAddress).getUnderlyingTokenAddress();
-        address redeemToken = IOption(optionAddress).redeemToken();
-        address pairAddress = factory.getPair(underlyingToken, redeemToken);
-
-        // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of redeemTokens.
-        // We are flash swapping from an underlying <> shortOptionToken pair,
-        // paying back a portion using underlyingTokens received from closing options.
-        // In the flash open, we did redeemTokens to underlyingTokens.
-        // In the flash close, we are doing underlyingTokens to redeemTokens and keeping the remainder.
-
-        // Close longOptionTokens using the redeemToken balance of this contract.
-        IERC20(redeemToken).safeTransfer(optionAddress, flashLoanQuantity);
-        uint256 requiredLongOptions =
-            PrimitiveRouterLib.getProportionalLongOptions(
-                IOption(optionAddress),
-                flashLoanQuantity
-            );
-
-        // Send out the required amount of options from the `to` address.
-        // WARNING: CALLS TO UNTRUSTED ADDRESS.
-        if (IOption(optionAddress).getExpiryTime() >= now)
-            IERC20(optionAddress).safeTransferFrom(
-                to,
-                optionAddress,
-                requiredLongOptions
-            );
-
-        // Close the options.
-        // Quantity of underlyingTokens this contract receives from burning option + redeem tokens.
-        (, , uint256 outputUnderlyings) =
-            IOption(optionAddress).closeOptions(address(this));
-
-        // Loan Remainder is the cost to pay out, should be 0 in most cases.
-        // Underlying Payout is the `premium` that the original caller receives in underlyingTokens.
-        // It's the remainder of underlyingTokens after the pair has been paid back underlyingTokens for the
-        // flash swapped shortOptionTokens.
-        (uint256 underlyingPayout, uint256 loanRemainder) =
-            PrimitiveRouterLib.getClosePremium(router, IOption(optionAddress), flashLoanQuantity);
-
-        // In most cases there will be an underlying payout, which is subtracted from the outputUnderlyings.
-        if (underlyingPayout > 0) {
-            outputUnderlyings = outputUnderlyings.sub(underlyingPayout);
-        }
-
-        // Pay back the pair in underlyingTokens.
-        if (outputUnderlyings > 0) {
-            IERC20(underlyingToken).safeTransfer(
-                pairAddress,
-                outputUnderlyings
-            );
-        }
-
-        // If loanRemainder is non-zero and non-negative, send underlyingTokens to the pair as payment (premium).
-        if (loanRemainder > 0) {
-            // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
-            // Revert if the minPayout is less than or equal to the underlyingPayment of 0.
-            // There is 0 underlyingPayment in the case that loanRemainder > 0.
-            // This code branch can be successful by setting `minPayout` to 0.
-            // This means the user is willing to pay to close the position.
-            require(minPayout <= underlyingPayout, "ERR_NEGATIVE_PAYOUT");
-            IERC20(underlyingToken).safeTransferFrom(
-                to,
-                pairAddress,
-                loanRemainder
-            );
-        }
-
-        emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
-        return (outputUnderlyings, underlyingPayout);
-    }
-
     /**
      * @dev     Sends shortOptionTokens to msg.sender, and pays back the UniswapV2Pair in underlyingTokens.
      * @notice  IMPORTANT: If minPayout is 0, the `to` address is liable for negative payouts *if* that occurs.
@@ -1129,11 +1051,14 @@ contract PrimitiveRouter is
         address redeemToken = IOption(optionAddress).redeemToken();
 
         (uint256 outputUnderlyings, uint256 underlyingPayout) =
-            _flashCloseLongOptionsThenSwap(
+            PrimitiveRouterLib.repayFlashSwap(
                 optionAddress,
                 flashLoanQuantity,
                 minPayout,
-                to
+                to,
+                PrimitiveRouterLib._closeOptions(optionAddress, flashLoanQuantity, minPayout, to, factory, router),
+                factory,
+                router
             );
 
         // If underlyingPayout is non-zero and non-negative, send it to the `to` address.
@@ -1167,11 +1092,14 @@ contract PrimitiveRouter is
         address redeemToken = IOption(optionAddress).redeemToken();
 
         (uint256 outputUnderlyings, uint256 underlyingPayout) =
-            _flashCloseLongOptionsThenSwap(
+            PrimitiveRouterLib.repayFlashSwap(
                 optionAddress,
                 flashLoanQuantity,
                 minPayout,
-                to
+                to,
+                PrimitiveRouterLib._closeOptions(optionAddress, flashLoanQuantity, minPayout, to, factory, router),
+                factory,
+                router
             );
 
         // If underlyingPayout is non-zero and non-negative, send it to the `to` address.
