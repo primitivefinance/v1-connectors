@@ -195,6 +195,7 @@ contract PrimitiveRouter is
         )
     {
         require(closeQuantity > 0, "ERR_ZERO");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
         uint256 inputRedeems =
             PrimitiveRouterLib.getProportionalShortOptions(
