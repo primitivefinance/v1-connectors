@@ -65,6 +65,12 @@ library PrimitiveRouterLib {
         uint256 shortQuantity
     );
 
+    event Closed(
+        address indexed from,
+        address indexed optionToken,
+        uint256 quantity
+    );
+
     event Exercised(
         address indexed from,
         address indexed optionToken,
@@ -281,6 +287,43 @@ library PrimitiveRouterLib {
         emit Exercised(msg.sender, address(optionToken), inputOptions);
         return
             optionToken.exerciseOptions(receiver, inputOptions, new bytes(0));
+    }
+
+    /**
+     * @dev     Burn optionTokens and redeemTokens to withdraw underlyingTokens.
+     * @notice  The redeemTokens to burn is equal to the optionTokens * strike ratio.
+     *          inputOptions = inputRedeems / strike ratio = outUnderlyings
+     * @param   optionToken The address of the option contract.
+     * @param   closeQuantity Quantity of optionTokens to burn.
+     *          (Implictly will burn the strike ratio quantity of redeemTokens).
+     * @param   receiver The underlyingTokens are sent to the receiver address.
+     */
+    function safeClose(
+        IOption optionToken,
+        uint256 closeQuantity,
+        address receiver,
+        uint256 inputRedeems
+    )
+        internal
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        IERC20(optionToken.redeemToken()).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            inputRedeems
+        );
+        if (optionToken.getExpiryTime() >= now)
+            IERC20(address(optionToken)).safeTransferFrom(
+                msg.sender,
+                address(optionToken),
+                closeQuantity
+            );
+        emit Closed(msg.sender, address(optionToken), closeQuantity);
+        return optionToken.closeOptions(receiver);
     }
 
     /**

@@ -162,8 +162,8 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public returns (uint256) {
-      require(redeemQuantity > 0, "ERR_ZERO");
-      require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
+        require(redeemQuantity > 0, "ERR_ZERO");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         IERC20(optionToken.redeemToken()).safeTransferFrom(
             msg.sender,
             address(optionToken),
@@ -197,24 +197,13 @@ contract PrimitiveRouter is
         require(closeQuantity > 0, "ERR_ZERO");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
-        uint256 inputRedeems =
-            PrimitiveRouterLib.getProportionalShortOptions(
-                optionToken,
-                closeQuantity
-            );
-        IERC20(optionToken.redeemToken()).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            inputRedeems
-        );
-        if (optionToken.getExpiryTime() >= now)
-            IERC20(address(optionToken)).safeTransferFrom(
-                msg.sender,
-                address(optionToken),
-                closeQuantity
-            );
-        emit Closed(msg.sender, address(optionToken), closeQuantity);
-        return optionToken.closeOptions(receiver);
+        return(PrimitiveRouterLib.safeClose(
+          optionToken, closeQuantity, receiver,
+          PrimitiveRouterLib.getProportionalShortOptions(
+              optionToken,
+              closeQuantity
+          )
+        ));
     }
 
     // ===== Primitive Core WETH Abstraction =====
