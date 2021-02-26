@@ -122,7 +122,7 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 mintQuantity,
         address receiver
-    ) public returns (uint256, uint256) {
+    ) external returns (uint256, uint256) {
         require(mintQuantity > 0, "0");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         PrimitiveRouterLib.safeTransferThenMint(
@@ -286,8 +286,7 @@ contract PrimitiveRouter is
     ) public returns (uint256, uint256) {
         require(exerciseQuantity > 0, "0");
         // Require one of the option's assets to be WETH.
-        address underlyingAddress = optionToken.getUnderlyingTokenAddress();
-        require(underlyingAddress == address(weth), "N_WETH");
+        require(optionToken.getUnderlyingTokenAddress() == address(weth), "N_WETH");
 
         (uint256 inputStrikes, uint256 inputOptions) =
             safeExercise(optionToken, exerciseQuantity, address(this));
@@ -532,7 +531,7 @@ contract PrimitiveRouter is
         // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
         // Warning: calls into msg.sender using `safeTransferFrom`. Msg.sender is not trusted.
         (, uint256 outputRedeems) =
-            safeMint(IOption(optionAddress), quantityOptions, address(this));
+            PrimitiveRouterLib.safeTransferThenMint(IOption(optionAddress), quantityOptions, address(this));
         // Send longOptionTokens from minting option operation to msg.sender.
         IERC20(optionAddress).safeTransfer(msg.sender, quantityOptions);
 
