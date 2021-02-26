@@ -133,29 +133,6 @@ library PrimitiveRouterLib {
       return(outputUnderlyings);
     }
 
-    /**
-     * @dev     The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
-     * @param   sender The original msg.sender of the UniswapV2Pair.swap() call.
-     * @param   amount0 The quantity of token0 received to the `to` address in the swap() call.
-     * @param   amount1 The quantity of token1 received to the `to` address in the swap() call.
-     * @param   data The payload passed in the `data` parameter of the swap() call.
-     */
-    function uniswapV2Call(
-        address sender,
-        uint256 amount0,
-        uint256 amount1,
-        bytes memory data,
-        IUniswapV2Factory factory
-    ) internal {
-        assert(msg.sender == factory.getPair(IUniswapV2Pair(msg.sender).token0(), IUniswapV2Pair(msg.sender).token1())); /// ensure that msg.sender is actually a V2 pair
-        (bool success, bytes memory returnData) = address(this).call(data);
-        require(
-            success &&
-                (returnData.length == 0 || abi.decode(returnData, (bool))),
-            "ERR_UNISWAPV2_CALL_FAIL"
-        );
-    }
-
     function repayFlashSwap(
         address optionAddress,
         uint256 flashLoanQuantity,

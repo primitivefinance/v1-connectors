@@ -100,7 +100,7 @@ contract PrimitiveRouter is
     // ===== Constructor =====
 
     constructor(address weth_, address registry_) public {
-        require(address(weth) == address(0x0), "ERR_INITIALIZED");
+        require(address(weth) == address(0x0), "INIT");
         weth = IWETH(weth_);
         emit Initialized(msg.sender);
         registry = IRegistry(registry_);
@@ -123,7 +123,7 @@ contract PrimitiveRouter is
         uint256 mintQuantity,
         address receiver
     ) public returns (uint256, uint256) {
-        require(mintQuantity > 0, "ERR_ZERO");
+        require(mintQuantity > 0, "0");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         PrimitiveRouterLib.safeTransferThenMint(
           optionToken,
@@ -144,7 +144,7 @@ contract PrimitiveRouter is
         uint256 exerciseQuantity,
         address receiver
     ) public returns (uint256, uint256) {
-        require(exerciseQuantity > 0, "ERR_ZERO");
+        require(exerciseQuantity > 0, "0");
         return(
             PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, receiver)
           );
@@ -162,7 +162,7 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public returns (uint256) {
-        require(redeemQuantity > 0, "ERR_ZERO");
+        require(redeemQuantity > 0, "0");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         IERC20(optionToken.redeemToken()).safeTransferFrom(
             msg.sender,
@@ -194,7 +194,7 @@ contract PrimitiveRouter is
             uint256
         )
     {
-        require(closeQuantity > 0, "ERR_ZERO");
+        require(closeQuantity > 0, "0");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
         return(PrimitiveRouterLib.safeClose(
@@ -219,10 +219,10 @@ contract PrimitiveRouter is
         payable
         returns (uint256, uint256)
     {
-        require(msg.value > 0, "ERR_ZERO");
+        require(msg.value > 0, "0");
         // Check to make sure we are minting a WETH call option.
         address underlyingAddress = optionToken.getUnderlyingTokenAddress();
-        require(address(weth) == underlyingAddress, "ERR_NOT_WETH");
+        require(address(weth) == underlyingAddress, "N_WETH");
 
         // Convert ethers into WETH, then send WETH to option contract in preparation of calling mintOptions().
         PrimitiveRouterLib.safeTransferETHFromWETH(
@@ -284,10 +284,10 @@ contract PrimitiveRouter is
         uint256 exerciseQuantity,
         address receiver
     ) public returns (uint256, uint256) {
-        require(exerciseQuantity > 0, "ERR_ZERO");
+        require(exerciseQuantity > 0, "0");
         // Require one of the option's assets to be WETH.
         address underlyingAddress = optionToken.getUnderlyingTokenAddress();
-        require(underlyingAddress == address(weth), "ERR_NOT_WETH");
+        require(underlyingAddress == address(weth), "N_WETH");
 
         (uint256 inputStrikes, uint256 inputOptions) =
             safeExercise(optionToken, exerciseQuantity, address(this));
@@ -314,7 +314,7 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public returns (uint256) {
-        require(redeemQuantity > 0, "ERR_ZERO");
+        require(redeemQuantity > 0, "0");
         // If options have not been exercised, there will be no strikeTokens to redeem, causing a revert.
         // Burns the redeem tokens that were sent to the contract, and withdraws the same quantity of WETH.
         // Sends the withdrawn WETH to this contract, so that it can be unwrapped prior to being sent to receiver.
@@ -351,7 +351,7 @@ contract PrimitiveRouter is
             uint256
         )
     {
-        require(closeQuantity > 0, "ERR_ZERO");
+        require(closeQuantity > 0, "0");
         (uint256 inputRedeems, uint256 inputOptions, uint256 outUnderlyings) =
             safeClose(optionToken, closeQuantity, address(this));
 
@@ -408,8 +408,8 @@ contract PrimitiveRouter is
         uint256 amountOptions,
         uint256 maxPremium
     ) external payable returns (bool) {
-        require(msg.value > 0, "ERR_ZERO");
-        require(maxPremium == msg.value, "PrimitiveV1: ERR_ETH_PREMIUM"); // must assert because cannot check in callback
+        require(msg.value > 0, "0");
+        require(maxPremium == msg.value, "PREM"); // must assert because cannot check in callback
         bytes4 selector =
             bytes4(
                 keccak256(
@@ -611,7 +611,7 @@ contract PrimitiveRouter is
     {
         require(
             quantityOptions.add(amountBMax) >= msg.value,
-            "ERR_NOT_ENOUGH_ETH"
+            "ETH"
         );
 
         uint256 amountA;
@@ -673,7 +673,7 @@ contract PrimitiveRouter is
                 // Send ether.
                 (bool success, ) = msg.sender.call.value(remainder)("");
                 // Revert is call is unsuccessful.
-                require(success, "ERR_SENDING_ETHER");
+                require(success, "SEND");
             }
         }
         return (amountA, amountB, liquidity);
@@ -939,9 +939,9 @@ contract PrimitiveRouter is
         uint256 maxPremium,
         address to
     ) public payable override returns (uint256, uint256) {
-        require(msg.sender == address(this), "ERR_NOT_SELF");
-        require(to != address(0x0), "ERR_TO_ADDRESS_ZERO");
-        require(to != msg.sender, "ERR_TO_MSG_SENDER");
+        require(msg.sender == address(this), "NOT_SELF");
+        require(to != address(0x0), "ADDR_0");
+        require(to != msg.sender, "SENDER");
         // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of underlyingTokens.
         address underlyingToken =
             IOption(optionAddress).getUnderlyingTokenAddress();
@@ -961,7 +961,7 @@ contract PrimitiveRouter is
         if (loanRemainder > 0) {
             address pairAddress_ = pairAddress;
             // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
-            require(maxPremium >= loanRemainder, "ERR_PREMIUM_OVER_MAX"); // check for users to not pay over their max desired value.
+            require(maxPremium >= loanRemainder, "PREM"); // check for users to not pay over their max desired value.
             IERC20(underlyingToken).safeTransferFrom(
                 to,
                 pairAddress,
@@ -991,9 +991,9 @@ contract PrimitiveRouter is
         uint256 maxPremium,
         address to
     ) public payable returns (uint256, uint256) {
-        require(msg.sender == address(this), "ERR_NOT_SELF");
-        require(to != address(0x0), "ERR_TO_ADDRESS_ZERO");
-        require(to != msg.sender, "ERR_TO_MSG_SENDER");
+        require(msg.sender == address(this), "NOT_SELF");
+        require(to != address(0x0), "ADDR_0");
+        require(to != msg.sender, "SENDER");
         // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of underlyingTokens.
         address underlyingToken =
             IOption(optionAddress).getUnderlyingTokenAddress();
@@ -1012,7 +1012,7 @@ contract PrimitiveRouter is
         if (loanRemainder > 0) {
             address pairAddress_ = pairAddress;
             // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
-            require(maxPremium >= loanRemainder, "ERR_PREMIUM_OVER_MAX"); // check for users to not pay over their max desired value.
+            require(maxPremium >= loanRemainder, "PREM"); // check for users to not pay over their max desired value.
             //_payPremiumInETH(pairAddress, loanRemainder);
             weth.deposit.value(loanRemainder)();
             // Transfer weth to pair to pay for premium
@@ -1022,7 +1022,7 @@ contract PrimitiveRouter is
                 (bool success, ) =
                     to.call.value(maxPremium.sub(loanRemainder))("");
                 // Revert is call is unsuccessful.
-                require(success, "ERR_SENDING_ETHER");
+                require(success, "SEND");
             }
         }
 
@@ -1043,14 +1043,11 @@ contract PrimitiveRouter is
         uint256 minPayout,
         address to
     ) public override returns (uint256, uint256) {
-        require(msg.sender == address(this), "ERR_NOT_SELF");
-        require(to != address(0x0), "ERR_TO_ADDRESS_ZERO");
-        require(to != msg.sender, "ERR_TO_MSG_SENDER");
-        address underlyingToken =
-            IOption(optionAddress).getUnderlyingTokenAddress();
-        address redeemToken = IOption(optionAddress).redeemToken();
+        require(msg.sender == address(this), "NOT_SELF");
+        require(to != address(0x0), "ADDR_0");
+        require(to != msg.sender, "SENDER");
 
-        (uint256 outputUnderlyings, uint256 underlyingPayout) =
+        (, uint256 underlyingPayout) =
             PrimitiveRouterLib.repayFlashSwap(
                 optionAddress,
                 flashLoanQuantity,
@@ -1064,10 +1061,9 @@ contract PrimitiveRouter is
         // If underlyingPayout is non-zero and non-negative, send it to the `to` address.
         if (underlyingPayout > 0) {
             // Revert if minPayout is greater than the actual payout.
-            require(underlyingPayout >= minPayout, "ERR_PREMIUM_UNDER_MIN");
-            IERC20(underlyingToken).safeTransfer(to, underlyingPayout);
+            require(underlyingPayout >= minPayout, "PREM");
+            IERC20(IOption(optionAddress).getUnderlyingTokenAddress()).safeTransfer(to, underlyingPayout);
         }
-        return (outputUnderlyings, underlyingPayout);
     }
 
     /**
@@ -1084,14 +1080,11 @@ contract PrimitiveRouter is
         uint256 minPayout,
         address to
     ) public returns (uint256, uint256) {
-        require(msg.sender == address(this), "ERR_NOT_SELF");
-        require(to != address(0x0), "ERR_TO_ADDRESS_ZERO");
-        require(to != msg.sender, "ERR_TO_MSG_SENDER");
-        address underlyingToken =
-            IOption(optionAddress).getUnderlyingTokenAddress();
-        address redeemToken = IOption(optionAddress).redeemToken();
+        require(msg.sender == address(this), "NOT_SELF");
+        require(to != address(0x0), "ADDR_0");
+        require(to != msg.sender, "SENDER");
 
-        (uint256 outputUnderlyings, uint256 underlyingPayout) =
+        (, uint256 underlyingPayout) =
             PrimitiveRouterLib.repayFlashSwap(
                 optionAddress,
                 flashLoanQuantity,
@@ -1105,14 +1098,13 @@ contract PrimitiveRouter is
         // If underlyingPayout is non-zero and non-negative, send it to the `to` address.
         if (underlyingPayout > 0) {
             // Revert if minPayout is greater than the actual payout.
-            require(underlyingPayout >= minPayout, "ERR_PREMIUM_UNDER_MIN");
+            require(underlyingPayout >= minPayout, "PREM");
             PrimitiveRouterLib.safeTransferWETHToETH(
                 weth,
                 to,
                 underlyingPayout
             );
         }
-        return (outputUnderlyings, underlyingPayout);
     }
 
     // ===== Callback Implementation =====
@@ -1130,6 +1122,12 @@ contract PrimitiveRouter is
         uint256 amount1,
         bytes calldata data
     ) external override {
-        PrimitiveRouterLib.uniswapV2Call(sender, amount0, amount1, data, factory);
+      assert(msg.sender == factory.getPair(IUniswapV2Pair(msg.sender).token0(), IUniswapV2Pair(msg.sender).token1())); /// ensure that msg.sender is actually a V2 pair
+      (bool success, bytes memory returnData) = address(this).call(data);
+      require(
+          success &&
+              (returnData.length == 0 || abi.decode(returnData, (bool))),
+          "UNI"
+      );
     }
 }
