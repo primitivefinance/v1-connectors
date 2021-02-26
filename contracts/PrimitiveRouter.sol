@@ -365,23 +365,22 @@ contract PrimitiveRouter is
         uint256 amountOptions,
         uint256 maxPremium
     ) public override nonReentrant returns (bool) {
-        bytes4 selector =
-            bytes4(
-                keccak256(
-                    bytes(
+        PrimitiveRouterLib._swapForUnderlying(optionToken, amountOptions,
+          abi.encodeWithSelector(
+              bytes4(
+                  keccak256(
+                      bytes(
                         "flashMintShortOptionsThenSwap(address,uint256,uint256,address)"
                     )
-                )
-            );
-        bytes memory params =
-            abi.encodeWithSelector(
-                selector, // function to call in this contract
-                optionToken, // option token to mint with flash loaned tokens
-                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
-                maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
-                msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
-            );
-        PrimitiveRouterLib._swapForUnderlying(optionToken, amountOptions, params, factory);
+                  )
+              ), // function to call in this contract
+              optionToken, // option token to mint with flash loaned tokens
+              amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
+              maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
+              msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
+          ),
+          factory
+        );
         return true;
     }
 
