@@ -145,6 +145,7 @@ contract PrimitiveRouter is
         address receiver
     ) public returns (uint256, uint256) {
         require(exerciseQuantity > 0, "0");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         return(
             PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, receiver)
           );
@@ -221,8 +222,7 @@ contract PrimitiveRouter is
     {
         require(msg.value > 0, "0");
         // Check to make sure we are minting a WETH call option.
-        address underlyingAddress = optionToken.getUnderlyingTokenAddress();
-        require(address(weth) == underlyingAddress, "N_WETH");
+        require(address(weth) == optionToken.getUnderlyingTokenAddress(), "N_WETH");
 
         // Convert ethers into WETH, then send WETH to option contract in preparation of calling mintOptions().
         PrimitiveRouterLib.safeTransferETHFromWETH(
