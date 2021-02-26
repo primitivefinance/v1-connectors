@@ -124,7 +124,7 @@ contract PrimitiveRouter is
         address receiver
     ) external returns (uint256, uint256) {
         require(mintQuantity > 0, "0");
-        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         PrimitiveRouterLib.safeTransferThenMint(
           optionToken,
           mintQuantity,
@@ -144,7 +144,7 @@ contract PrimitiveRouter is
         uint256 exerciseQuantity,
         address receiver
     ) external returns (uint256, uint256) {
-        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         return(
             PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, receiver)
           );
@@ -162,7 +162,7 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) external returns (uint256) {
-        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         return(PrimitiveRouterLib.safeRedeem(optionToken, redeemQuantity, receiver));
     }
 
@@ -188,7 +188,7 @@ contract PrimitiveRouter is
         )
     {
         require(closeQuantity > 0, "0");
-        require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
         return(PrimitiveRouterLib.safeClose(
           optionToken, closeQuantity, receiver,
@@ -215,6 +215,7 @@ contract PrimitiveRouter is
         require(msg.value > 0, "0");
         // Check to make sure we are minting a WETH call option.
         require(address(weth) == optionToken.getUnderlyingTokenAddress(), "N_WETH");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
 
         // Convert ethers into WETH, then send WETH to option contract in preparation of calling mintOptions().
         PrimitiveRouterLib.safeTransferETHFromWETH(
