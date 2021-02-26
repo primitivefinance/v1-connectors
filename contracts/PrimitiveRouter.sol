@@ -143,8 +143,7 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 exerciseQuantity,
         address receiver
-    ) public returns (uint256, uint256) {
-        require(exerciseQuantity > 0, "0");
+    ) external returns (uint256, uint256) {
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
         return(
             PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, receiver)
@@ -162,16 +161,9 @@ contract PrimitiveRouter is
         IOption optionToken,
         uint256 redeemQuantity,
         address receiver
-    ) public returns (uint256) {
-        require(redeemQuantity > 0, "0");
+    ) external returns (uint256) {
         require(PrimitiveRouterLib.realOption(optionToken, registry), "INVALID_OPTION");
-        IERC20(optionToken.redeemToken()).safeTransferFrom(
-            msg.sender,
-            address(optionToken),
-            redeemQuantity
-        );
-        emit Redeemed(msg.sender, address(optionToken), redeemQuantity);
-        return optionToken.redeemStrikeTokens(receiver);
+        return(PrimitiveRouterLib.safeRedeem(optionToken, redeemQuantity, receiver));
     }
 
     /**
@@ -289,7 +281,7 @@ contract PrimitiveRouter is
         require(optionToken.getUnderlyingTokenAddress() == address(weth), "N_WETH");
 
         (uint256 inputStrikes, uint256 inputOptions) =
-            safeExercise(optionToken, exerciseQuantity, address(this));
+            PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, address(this));
 
         // Converts the withdrawn WETH to ethers, then sends the ethers to the receiver address.
         PrimitiveRouterLib.safeTransferWETHToETH(
@@ -313,12 +305,11 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public returns (uint256) {
-        require(redeemQuantity > 0, "0");
         // If options have not been exercised, there will be no strikeTokens to redeem, causing a revert.
         // Burns the redeem tokens that were sent to the contract, and withdraws the same quantity of WETH.
         // Sends the withdrawn WETH to this contract, so that it can be unwrapped prior to being sent to receiver.
         uint256 inputRedeems =
-            safeRedeem(optionToken, redeemQuantity, address(this));
+            PrimitiveRouterLib.safeRedeem(optionToken, redeemQuantity, address(this));
         // Unwrap the redeemed WETH and then send the ethers to the receiver.
         PrimitiveRouterLib.safeTransferWETHToETH(
             weth,
