@@ -1130,14 +1130,6 @@ contract PrimitiveRouter is
         uint256 amount1,
         bytes calldata data
     ) external override {
-        address token0 = IUniswapV2Pair(msg.sender).token0();
-        address token1 = IUniswapV2Pair(msg.sender).token1();
-        assert(msg.sender == factory.getPair(token0, token1)); /// ensure that msg.sender is actually a V2 pair
-        (bool success, bytes memory returnData) = address(this).call(data);
-        require(
-            success &&
-                (returnData.length == 0 || abi.decode(returnData, (bool))),
-            "ERR_UNISWAPV2_CALL_FAIL"
-        );
+        PrimitiveRouterLib.uniswapV2Call(sender, amount0, amount1, data, factory);
     }
 }
