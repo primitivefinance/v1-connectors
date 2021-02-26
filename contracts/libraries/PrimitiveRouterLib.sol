@@ -97,6 +97,33 @@ library PrimitiveRouterLib {
       );
     }
 
+    /**
+     * @dev     Burns redeemTokens to withdraw available strikeTokens.
+     * @notice  inputRedeems = outputStrikes.
+     * @param   optionToken The address of the option contract.
+     * @param   redeemQuantity redeemQuantity of redeemTokens to burn.
+     * @param   receiver The strikeTokens are sent to the receiver address.
+     */
+    function safeRedeem(
+        IOption optionToken,
+        uint256 redeemQuantity,
+        address receiver
+    ) internal returns (uint256) {
+        require(redeemQuantity > 0, "0");
+        IERC20(optionToken.redeemToken()).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            redeemQuantity
+        );
+        emit Redeemed(msg.sender, address(optionToken), redeemQuantity);
+        return optionToken.redeemStrikeTokens(receiver);
+    }
+    event Redeemed(
+        address indexed from,
+        address indexed optionToken,
+        uint256 quantity
+    );
+
     function _closeOptions(
       address optionAddress,
       uint256 flashLoanQuantity,
@@ -423,6 +450,7 @@ library PrimitiveRouterLib {
         uint256 exerciseQuantity,
         address receiver
     ) internal returns (uint256, uint256) {
+        require(exerciseQuantity > 0, "0");
         // Calculate quantity of strikeTokens needed to exercise quantity of optionTokens.
         IERC20(address(optionToken)).safeTransferFrom(
             msg.sender,
