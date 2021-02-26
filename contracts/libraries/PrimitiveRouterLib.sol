@@ -423,6 +423,7 @@ library PrimitiveRouterLib {
             uint256
         )
     {
+        require(closeQuantity > 0, "0");
         IERC20(optionToken.redeemToken()).safeTransferFrom(
             msg.sender,
             address(optionToken),
@@ -480,6 +481,7 @@ library PrimitiveRouterLib {
         bytes memory params,
         IUniswapV2Factory factory
     ) internal {
+        require(msg.value > 0, "0");
         address redeemToken = optionToken.redeemToken();
         address underlyingToken = optionToken.getUnderlyingTokenAddress();
         IUniswapV2Pair pair =
@@ -655,6 +657,8 @@ library PrimitiveRouterLib {
         address to,
         uint256 amount
     ) internal {
+        require(amount > 0, "0");
+
         // Deposit the ethers received from amount into the WETH contract.
         weth.deposit.value(amount)();
 

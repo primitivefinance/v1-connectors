@@ -180,14 +180,13 @@ contract PrimitiveRouter is
         uint256 closeQuantity,
         address receiver
     )
-        public
+        external
         returns (
             uint256,
             uint256,
             uint256
         )
     {
-        require(closeQuantity > 0, "0");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
         return(PrimitiveRouterLib.safeClose(
@@ -212,7 +211,6 @@ contract PrimitiveRouter is
         payable
         returns (uint256, uint256)
     {
-        require(msg.value > 0, "0");
         // Check to make sure we are minting a WETH call option.
         require(address(weth) == optionToken.getUnderlyingTokenAddress(), "N_WETH");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
@@ -249,6 +247,7 @@ contract PrimitiveRouter is
         payable
         returns (uint256, uint256)
     {
+      require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
       // Calculate quantity of optionTokens needed to burn.
       // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
       // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
@@ -277,7 +276,7 @@ contract PrimitiveRouter is
         uint256 exerciseQuantity,
         address receiver
     ) public returns (uint256, uint256) {
-        require(exerciseQuantity > 0, "0");
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         // Require one of the option's assets to be WETH.
         require(optionToken.getUnderlyingTokenAddress() == address(weth), "N_WETH");
 
@@ -306,6 +305,8 @@ contract PrimitiveRouter is
         uint256 redeemQuantity,
         address receiver
     ) public returns (uint256) {
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
+
         // If options have not been exercised, there will be no strikeTokens to redeem, causing a revert.
         // Burns the redeem tokens that were sent to the contract, and withdraws the same quantity of WETH.
         // Sends the withdrawn WETH to this contract, so that it can be unwrapped prior to being sent to receiver.
@@ -342,9 +343,14 @@ contract PrimitiveRouter is
             uint256
         )
     {
-        require(closeQuantity > 0, "0");
         (uint256 inputRedeems, uint256 inputOptions, uint256 outUnderlyings) =
-            safeClose(optionToken, closeQuantity, address(this));
+        PrimitiveRouterLib.safeClose(
+          optionToken, closeQuantity, address(this),
+          PrimitiveRouterLib.getProportionalShortOptions(
+              optionToken,
+              closeQuantity
+          )
+        );
 
         // Since underlyngTokens are WETH, unwrap them then send the ethers to the receiver.
         PrimitiveRouterLib.safeTransferWETHToETH(weth, receiver, closeQuantity);
@@ -391,32 +397,28 @@ contract PrimitiveRouter is
      *          IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
      * @param   optionToken The option address.
      * @param   amountOptions The quantity of longOptionTokens to purchase.
-     * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
      */
     function openFlashLongWithETH(
         IOption optionToken,
-        uint256 amountOptions,
-        uint256 maxPremium
+        uint256 amountOptions
     ) external payable returns (bool) {
         require(msg.value > 0, "0");
-        require(maxPremium == msg.value, "PREM"); // must assert because cannot check in callback
-        bytes4 selector =
+        PrimitiveRouterLib._swapForUnderlying(optionToken, amountOptions,
+          abi.encodeWithSelector(
             bytes4(
                 keccak256(
                     bytes(
                         "flashMintShortOptionsThenSwapWithETH(address,uint256,uint256,address)"
                     )
                 )
-            );
-        bytes memory params =
-            abi.encodeWithSelector(
-                selector, // function to call in this contract
-                optionToken, // option token to mint with flash loaned tokens
-                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
-                maxPremium, // total price paid (in underlyingTokens) for selling shortOptionTokens
-                msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
-            );
-        PrimitiveRouterLib._swapForUnderlying(optionToken, amountOptions, params, factory);
+            ), // function to call in this contract
+              optionToken, // option token to mint with flash loaned tokens
+              amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
+              msg.value, // total price paid (in underlyingTokens) for selling shortOptionTokens
+              msg.sender // address to pull the remainder loan amount to pay, and send longOptionTokens to.
+          ),
+          factory
+        );
         return true;
     }
 
@@ -433,23 +435,22 @@ contract PrimitiveRouter is
         uint256 amountRedeems,
         uint256 minPayout
     ) public override nonReentrant returns (bool) {
-        bytes4 selector =
+        PrimitiveRouterLib._swapForRedeem(optionToken, amountRedeems,
+          abi.encodeWithSelector(
             bytes4(
                 keccak256(
                     bytes(
                         "flashCloseLongOptionsThenSwap(address,uint256,uint256,address)"
                     )
                 )
-            );
-        bytes memory params =
-            abi.encodeWithSelector(
-                selector, // function to call in this contract
-                optionToken, // option token to close with flash loaned redeemTokens
-                amountRedeems, // quantity of redeemTokens from flash loan to use to close options
-                minPayout, // total remaining underlyingTokens after flash loan is paid
-                msg.sender // address to send payout of underlyingTokens to. Will pull underlyingTokens if negative payout and minPayout <= 0.
-            );
-        PrimitiveRouterLib._swapForRedeem(optionToken, amountRedeems, params, factory);
+            ), // function to call in this contract
+              optionToken, // option token to close with flash loaned redeemTokens
+              amountRedeems, // quantity of redeemTokens from flash loan to use to close options
+              minPayout, // total remaining underlyingTokens after flash loan is paid
+              msg.sender // address to send payout of underlyingTokens to. Will pull underlyingTokens if negative payout and minPayout <= 0.
+          ),
+          factory
+        );
         return true;
     }
 
@@ -466,23 +467,21 @@ contract PrimitiveRouter is
         uint256 amountRedeems,
         uint256 minPayout
     ) public nonReentrant returns (bool) {
-        bytes4 selector =
+        PrimitiveRouterLib._swapForRedeem(optionToken, amountRedeems,
+          abi.encodeWithSelector(
             bytes4(
                 keccak256(
                     bytes(
                         "flashCloseLongOptionsThenSwapForETH(address,uint256,uint256,address)"
                     )
                 )
-            );
-        bytes memory params =
-            abi.encodeWithSelector(
-                selector, // function to call in this contract
-                optionToken, // option token to close with flash loaned redeemTokens
-                amountRedeems, // quantity of redeemTokens from flash loan to use to close options
-                minPayout, // total remaining underlyingTokens after flash loan is paid
-                msg.sender // address to send payout of underlyingTokens to. Will pull underlyingTokens if negative payout and minPayout <= 0.
-            );
-        PrimitiveRouterLib._swapForRedeem(optionToken, amountRedeems, params, factory);
+            ), // function to call in this contract
+              optionToken, // option token to close with flash loaned redeemTokens
+              amountRedeems, // quantity of redeemTokens from flash loan to use to close options
+              minPayout, // total remaining underlyingTokens after flash loan is paid
+              msg.sender // address to send payout of underlyingTokens to. Will pull underlyingTokens if negative payout and minPayout <= 0.
+          ),
+          factory);
         return true;
     }
 
