@@ -23,7 +23,7 @@ pragma solidity ^0.6.2;
 
 /**
  * @title   A user-friendly smart contract to interface with the Primitive and Uniswap protocols.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v1.3.0
+ * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
  * @author  Primitive
  */
 
@@ -51,7 +51,7 @@ import {
 } from "./interfaces/IPrimitiveRouter.sol";
 import {PrimitiveRouterLib} from "./libraries/PrimitiveRouterLib.sol";
 import {
-  IRegistry
+    IRegistry
 } from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 
 import "hardhat/console.sol";
@@ -126,9 +126,9 @@ contract PrimitiveRouter is
         require(mintQuantity > 0, "0");
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         PrimitiveRouterLib.safeTransferThenMint(
-          optionToken,
-          mintQuantity,
-          receiver
+            optionToken,
+            mintQuantity,
+            receiver
         );
     }
 
@@ -145,9 +145,13 @@ contract PrimitiveRouter is
         address receiver
     ) external returns (uint256, uint256) {
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
-        return(
-            PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, receiver)
-          );
+        return (
+            PrimitiveRouterLib.safeExercise(
+                optionToken,
+                exerciseQuantity,
+                receiver
+            )
+        );
     }
 
     /**
@@ -163,7 +167,9 @@ contract PrimitiveRouter is
         address receiver
     ) external returns (uint256) {
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
-        return(PrimitiveRouterLib.safeRedeem(optionToken, redeemQuantity, receiver));
+        return (
+            PrimitiveRouterLib.safeRedeem(optionToken, redeemQuantity, receiver)
+        );
     }
 
     /**
@@ -189,13 +195,17 @@ contract PrimitiveRouter is
     {
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         // Calculate the quantity of redeemTokens that need to be burned. (What we mean by Implicit).
-        return(PrimitiveRouterLib.safeClose(
-          optionToken, closeQuantity, receiver,
-          PrimitiveRouterLib.getProportionalShortOptions(
-              optionToken,
-              closeQuantity
-          )
-        ));
+        return (
+            PrimitiveRouterLib.safeClose(
+                optionToken,
+                closeQuantity,
+                receiver,
+                PrimitiveRouterLib.getProportionalShortOptions(
+                    optionToken,
+                    closeQuantity
+                )
+            )
+        );
     }
 
     // ===== Primitive Core WETH Abstraction =====
@@ -212,7 +222,10 @@ contract PrimitiveRouter is
         returns (uint256, uint256)
     {
         // Check to make sure we are minting a WETH call option.
-        require(address(weth) == optionToken.getUnderlyingTokenAddress(), "N_WETH");
+        require(
+            address(weth) == optionToken.getUnderlyingTokenAddress(),
+            "N_WETH"
+        );
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
 
         // Convert ethers into WETH, then send WETH to option contract in preparation of calling mintOptions().
@@ -247,19 +260,23 @@ contract PrimitiveRouter is
         payable
         returns (uint256, uint256)
     {
-      require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
-      // Calculate quantity of optionTokens needed to burn.
-      // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
-      // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
-      // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
-      // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
-        return(
-          PrimitiveRouterLib.safeExerciseWithETH(optionToken, receiver, weth, PrimitiveRouterLib.getProportionalLongOptions(
-              optionToken,
-              msg.value
-          )
-        )
-      );
+        require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
+        // Calculate quantity of optionTokens needed to burn.
+        // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
+        // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
+        // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
+        // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
+        return (
+            PrimitiveRouterLib.safeExerciseWithETH(
+                optionToken,
+                receiver,
+                weth,
+                PrimitiveRouterLib.getProportionalLongOptions(
+                    optionToken,
+                    msg.value
+                )
+            )
+        );
     }
 
     /**
@@ -278,10 +295,17 @@ contract PrimitiveRouter is
     ) public returns (uint256, uint256) {
         require(PrimitiveRouterLib.realOption(optionToken, registry), "OPT");
         // Require one of the option's assets to be WETH.
-        require(optionToken.getUnderlyingTokenAddress() == address(weth), "N_WETH");
+        require(
+            optionToken.getUnderlyingTokenAddress() == address(weth),
+            "N_WETH"
+        );
 
         (uint256 inputStrikes, uint256 inputOptions) =
-            PrimitiveRouterLib.safeExercise(optionToken, exerciseQuantity, address(this));
+            PrimitiveRouterLib.safeExercise(
+                optionToken,
+                exerciseQuantity,
+                address(this)
+            );
 
         // Converts the withdrawn WETH to ethers, then sends the ethers to the receiver address.
         PrimitiveRouterLib.safeTransferWETHToETH(
@@ -311,7 +335,11 @@ contract PrimitiveRouter is
         // Burns the redeem tokens that were sent to the contract, and withdraws the same quantity of WETH.
         // Sends the withdrawn WETH to this contract, so that it can be unwrapped prior to being sent to receiver.
         uint256 inputRedeems =
-            PrimitiveRouterLib.safeRedeem(optionToken, redeemQuantity, address(this));
+            PrimitiveRouterLib.safeRedeem(
+                optionToken,
+                redeemQuantity,
+                address(this)
+            );
         // Unwrap the redeemed WETH and then send the ethers to the receiver.
         PrimitiveRouterLib.safeTransferWETHToETH(
             weth,
@@ -344,13 +372,15 @@ contract PrimitiveRouter is
         )
     {
         (uint256 inputRedeems, uint256 inputOptions, uint256 outUnderlyings) =
-        PrimitiveRouterLib.safeClose(
-          optionToken, closeQuantity, address(this),
-          PrimitiveRouterLib.getProportionalShortOptions(
-              optionToken,
-              closeQuantity
-          )
-        );
+            PrimitiveRouterLib.safeClose(
+                optionToken,
+                closeQuantity,
+                address(this),
+                PrimitiveRouterLib.getProportionalShortOptions(
+                    optionToken,
+                    closeQuantity
+                )
+            );
 
         // Since underlyngTokens are WETH, unwrap them then send the ethers to the receiver.
         PrimitiveRouterLib.safeTransferWETHToETH(weth, receiver, closeQuantity);
