@@ -280,8 +280,8 @@ contract PrimitiveSwaps is
      * @dev     Receives underlyingTokens from a UniswapV2Pair.swap() call from a pair with
      *          shortOptionTokens and underlyingTokens.
      *          Uses underlyingTokens to mint long (option) + short (redeem) tokens.
-     *          Sends longOptionTokens to _msgSender(), and pays back the UniswapV2Pair with shortOptionTokens,
-     *          AND any remainder quantity of underlyingTokens (paid by _msgSender()).
+     *          Sends longOptionTokens to `receiver`, and pays back the UniswapV2Pair with shortOptionTokens,
+     *          AND any remainder quantity of underlyingTokens (paid by _CALLER)).
      * @notice  If the first address in the path is not the shortOptionToken address, the tx will fail.
      *          IMPORTANT: UniswapV2 adds a fee of 0.301% to the option premium cost.
      * @param   optionAddress The address of the Option contract.
@@ -292,36 +292,44 @@ contract PrimitiveSwaps is
      */
     function flashMintShortOptionsThenSwap(
         address optionAddress,
-        uint256 flashLoanQuantity,
-        uint256 maxPremium,
-        address to
-    ) public payable override returns (uint256, uint256) {
+        uint256 quantity,
+        uint256 maxPremium
+    )
+        public
+        payable
+        override
+        onlyTrusted(IOption(optionAddress))
+        returns (uint256, uint256)
+    {
         require(_msgSender() == address(this), "NOT_SELF");
-        require(to != address(0x0), "ADDR_0");
-        require(to != _msgSender(), "SENDER");
-        // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of underlyingTokens.
-        (IUniswapV2Pair pair, address underlyingToken, address redeemToken) =
-            getOptionPair(IOption(optionAddress));
+        IOption optionToken = IOption(optionAddress);
+        // IMPORTANT: Assume this contract has already received `quantity` of underlyingTokens.
+        (IUniswapV2Pair pair, address underlying, address redeem) =
+            getOptionPair(optionToken);
 
-        uint256 loanRemainder =
-            SwapsLib.repayWithRedeem(
-                optionAddress,
-                flashLoanQuantity,
-                factory,
-                router
-            );
+        _mintOptions(optionToken);
 
-        // If loanRemainder is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
-        if (loanRemainder > 0) {
+        (uint256 premium, uint256 redeemPremium) =
+            SwapLib.repay(router, optionToken, quantity);
+
+        // If premium is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
+        if (premium > 0) {
             // Pull underlyingTokens from the original _msgSender() to pay the remainder of the flash swap.
-            require(maxPremium >= loanRemainder, "PREM"); // check for users to not pay over their max desired value.
-            IERC20(underlyingToken).safeTransferFrom(
+            require(maxPremium >= premium, "PrimitiveSwaps: MAX_PREMIUM"); // check for users to not pay over their max desired value.
+            IERC20(underlying).safeTransferFrom(
                 getCaller(), // WARNING: This must be the `msg.sender` of the original executing fn.
                 address(pair),
-                loanRemainder
+                premium
             );
         }
-        return (flashLoanQuantity, loanRemainder);
+        // Pay pair in redeem
+        if (redeemPremium > 0) {
+            IERC20(redeem).safeTransfer(address(pair), redeemPremium);
+        }
+        // Return tokens to original caller
+        _transferToCaller(redeem);
+        _transferToCaller(optionAddress);
+        return (quantity, premium);
     }
 
     /**

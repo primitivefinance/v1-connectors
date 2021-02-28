@@ -125,6 +125,20 @@ abstract contract PrimitiveConnector is Context {
         return true;
     }
 
+    function _mintOptions(IOption optionToken)
+        internal
+        returns (uint256, uint256)
+    {
+        address underlying = optionToken.getUnderlyingTokenAddress();
+        uint256 quantity = IERC20(underlying).balanceOf(address(this));
+        if (quantity > 0) {
+            IERC20(underlying).safeTransfer(optionAddress, quantity);
+            return optionToken.mintOptions(address(this));
+        }
+
+        return (0, 0);
+    }
+
     // ===== Fallback =====
     receive() external payable {
         assert(_msgSender() == address(_weth)); // only accept ETH via fallback from the WETH contract

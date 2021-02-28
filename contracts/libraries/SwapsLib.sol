@@ -168,11 +168,6 @@ library SwapsLib {
         address redeemToken = IOption(optionAddress).redeemToken();
         address pairAddress = factory.getPair(underlyingToken, redeemToken);
 
-        // Mint options to this contract using flashLoanQuantity of `underlyingToken`s.
-        IERC20(underlyingToken).safeTransfer(optionAddress, flashLoanQuantity);
-        (, uint256 mintedRedeems) =
-            IOption(optionAddress).mintOptions(address(this));
-
         // The loanRemainder will be the amount of underlyingTokens that are needed from the original
         // transaction caller in order to pay the flash swap.
         // IMPORTANT: THIS IS EFFECTIVELY THE PREMIUM PAID IN UNDERLYINGTOKENS TO PURCHASE THE OPTIONTOKEN.
@@ -203,6 +198,26 @@ library SwapsLib {
             IERC20(redeemToken).safeTransfer(pairAddress, mintedRedeems);
         }
         return loanRemainder;
+    }
+
+    /**
+     * @notice Returns the swap amounts required to return to repay the flash loan.
+     */
+    function repay(
+        IUniswapV2Router02 router,
+        IOption optionToken,
+        uint256 flashLoanQuantity
+    ) internal returns (uint256, uint256) {
+        (uint256 premium, uint256 extraRedeems) =
+            getOpenPremium(router, optionToken, flashLoanQuantity);
+
+        uint256 redeemPremium =
+            getProportionalShortOptions(optionToken, flashLoanQuantity);
+
+        if (extraRedeems > 0) {
+            redeemPremium = redeemPremium.sub(extraRedeems);
+        }
+        return (premium, redeemPremium);
     }
 
     function _flashMintShortOptionsThenSwap(
