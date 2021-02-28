@@ -31,10 +31,19 @@ pragma solidity ^0.6.2;
 import {
     IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import {
+    IUniswapV2Factory
+} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
+import {
+    IUniswapV2Pair
+} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 // Primitive
 import {
     IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol";
+import {
+  IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 import {
     TraderLib,
     IERC20
@@ -43,9 +52,7 @@ import {IWETH} from "../interfaces/IWETH.sol";
 // Open Zeppelin
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-  IRegistry
-} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
+
 
 library PrimitiveRouterLib {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
@@ -58,11 +65,20 @@ library PrimitiveRouterLib {
         uint256 shortQuantity
     );
 
+    event Closed(
+        address indexed from,
+        address indexed optionToken,
+        uint256 quantity
+    );
+
     event Exercised(
         address indexed from,
         address indexed optionToken,
         uint256 quantity
     );
+
+    event FlashOpened(address indexed from, uint256 quantity, uint256 premium); // Emmitted on flash opening a long position
+    event FlashClosed(address indexed from, uint256 quantity, uint256 payout);
 
     function realOption(
       IOption option,
@@ -79,6 +95,182 @@ library PrimitiveRouterLib {
         &&
         address(option) != address(0)
       );
+    }
+
+    /**
+     * @dev     Burns redeemTokens to withdraw available strikeTokens.
+     * @notice  inputRedeems = outputStrikes.
+     * @param   optionToken The address of the option contract.
+     * @param   redeemQuantity redeemQuantity of redeemTokens to burn.
+     * @param   receiver The strikeTokens are sent to the receiver address.
+     */
+    function safeRedeem(
+        IOption optionToken,
+        uint256 redeemQuantity,
+        address receiver
+    ) internal returns (uint256) {
+        require(redeemQuantity > 0, "0");
+        IERC20(optionToken.redeemToken()).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            redeemQuantity
+        );
+        emit Redeemed(msg.sender, address(optionToken), redeemQuantity);
+        return optionToken.redeemStrikeTokens(receiver);
+    }
+    event Redeemed(
+        address indexed from,
+        address indexed optionToken,
+        uint256 quantity
+    );
+
+    function _closeOptions(
+      address optionAddress,
+      uint256 flashLoanQuantity,
+      uint256 minPayout,
+      address to,
+      IUniswapV2Factory factory,
+      IUniswapV2Router02 router
+    ) internal returns (uint256) {
+      // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of redeemTokens.
+      // We are flash swapping from an underlying <> shortOptionToken pair,
+      // paying back a portion using underlyingTokens received from closing options.
+      // In the flash open, we did redeemTokens to underlyingTokens.
+      // In the flash close, we are doing underlyingTokens to redeemTokens and keeping the remainder.
+
+      // Close longOptionTokens using the redeemToken balance of this contract.
+      IERC20(IOption(optionAddress).redeemToken()).safeTransfer(optionAddress, flashLoanQuantity);
+
+      // Send out the required amount of options from the `to` address.
+      // WARNING: CALLS TO UNTRUSTED ADDRESS.
+      if (IOption(optionAddress).getExpiryTime() >= now)
+        IERC20(optionAddress).safeTransferFrom(
+            to,
+            optionAddress,
+            getProportionalLongOptions(
+                IOption(optionAddress),
+                flashLoanQuantity
+            )
+      );
+
+      // Close the options.
+      // Quantity of underlyingTokens this contract receives from burning option + redeem tokens.
+      (, , uint256 outputUnderlyings) =
+        IOption(optionAddress).closeOptions(address(this));
+      return(outputUnderlyings);
+    }
+
+    function repayFlashSwap(
+        address optionAddress,
+        uint256 flashLoanQuantity,
+        uint256 minPayout,
+        address to,
+        uint256 outputUnderlyings,
+        IUniswapV2Factory factory,
+        IUniswapV2Router02 router
+    ) internal returns (uint256, uint256) {
+        // Loan Remainder is the cost to pay out, should be 0 in most cases.
+        // Underlying Payout is the `premium` that the original caller receives in underlyingTokens.
+        // It's the remainder of underlyingTokens after the pair has been paid back underlyingTokens for the
+        // flash swapped shortOptionTokens.
+        (uint256 underlyingPayout, uint256 loanRemainder) =
+            PrimitiveRouterLib.getClosePremium(router, IOption(optionAddress), flashLoanQuantity);
+
+        // In most cases there will be an underlying payout, which is subtracted from the outputUnderlyings.
+        if (underlyingPayout > 0) {
+            outputUnderlyings = outputUnderlyings.sub(underlyingPayout);
+        }
+
+        // Pay back the pair in underlyingTokens.
+        if (outputUnderlyings > 0) {
+            IERC20(IOption(optionAddress).getUnderlyingTokenAddress()).safeTransfer(
+                factory.getPair(IOption(optionAddress).getUnderlyingTokenAddress(), IOption(optionAddress).redeemToken()),
+                outputUnderlyings
+            );
+        }
+
+        // If loanRemainder is non-zero and non-negative, send underlyingTokens to the pair as payment (premium).
+        if (loanRemainder > 0) {
+            // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
+            // Revert if the minPayout is less than or equal to the underlyingPayment of 0.
+            // There is 0 underlyingPayment in the case that loanRemainder > 0.
+            // This code branch can be successful by setting `minPayout` to 0.
+            // This means the user is willing to pay to close the position.
+            require(minPayout <= underlyingPayout, "ERR_NEGATIVE_PAYOUT");
+            IERC20(IOption(optionAddress).getUnderlyingTokenAddress()).safeTransferFrom(
+                to,
+                factory.getPair(IOption(optionAddress).getUnderlyingTokenAddress(), IOption(optionAddress).redeemToken()),
+                loanRemainder
+            );
+        }
+
+        emit FlashClosed(msg.sender, outputUnderlyings, underlyingPayout);
+        return (outputUnderlyings, underlyingPayout);
+    }
+
+    function _flashMintShortOptionsThenSwap(
+        address optionAddress,
+        uint256 flashLoanQuantity,
+        address to,
+        IUniswapV2Factory factory,
+        IUniswapV2Router02 router
+    ) internal returns (uint256) {
+        // IMPORTANT: Assume this contract has already received `flashLoanQuantity` of underlyingTokens.
+        address underlyingToken =
+            IOption(optionAddress).getUnderlyingTokenAddress();
+        address redeemToken = IOption(optionAddress).redeemToken();
+        address pairAddress = factory.getPair(underlyingToken, redeemToken);
+
+        // Mint longOptionTokens using the underlyingTokens received from UniswapV2 flash swap to this contract.
+        // Send underlyingTokens from this contract to the optionToken contract, then call mintOptions.
+        IERC20(underlyingToken).safeTransfer(optionAddress, flashLoanQuantity);
+        // Mint longOptionTokens using the underlyingTokens received from UniswapV2 flash swap to this contract.
+        // Send underlyingTokens from this contract to the optionToken contract, then call mintOptions.
+        (uint256 mintedOptions, uint256 mintedRedeems) =
+            IOption(optionAddress).mintOptions(address(this));
+
+        // The loanRemainder will be the amount of underlyingTokens that are needed from the original
+        // transaction caller in order to pay the flash swap.
+        // IMPORTANT: THIS IS EFFECTIVELY THE PREMIUM PAID IN UNDERLYINGTOKENS TO PURCHASE THE OPTIONTOKEN.
+        uint256 loanRemainder;
+
+        // Economically, negativePremiumPaymentInRedeems value should always be 0.
+        // In the case that we minted more redeemTokens than are needed to pay back the flash swap,
+        // (short -> underlying is a positive trade), there is an effective negative premium.
+        // In that case, this function will send out `negativePremiumAmount` of redeemTokens to the original caller.
+        // This means the user gets to keep the extra redeemTokens for free.
+        // Negative premium amount is the opposite difference of the loan remainder: (paid - flash loan amount)
+        uint256 negativePremiumPaymentInRedeems;
+        (loanRemainder, negativePremiumPaymentInRedeems) = getOpenPremium(
+            router,
+            IOption(optionAddress),
+            flashLoanQuantity
+        );
+
+        // In the case that more redeemTokens were minted than need to be sent back as payment,
+        // calculate the new mintedRedeems value to send to the pair
+        // (don't send all the minted redeemTokens).
+        if (negativePremiumPaymentInRedeems > 0) {
+            mintedRedeems = mintedRedeems.sub(negativePremiumPaymentInRedeems);
+        }
+
+        // In most cases, all of the minted redeemTokens will be sent to the pair as payment for the flash swap.
+        if (mintedRedeems > 0) {
+            IERC20(redeemToken).safeTransfer(pairAddress, mintedRedeems);
+        }
+
+        // If negativePremiumAmount is non-zero and non-negative, send redeemTokens to the `to` address.
+        if (negativePremiumPaymentInRedeems > 0) {
+            IERC20(redeemToken).safeTransfer(
+                to,
+                negativePremiumPaymentInRedeems
+            );
+        }
+
+        // Send minted longOptionTokens (option) to the original msg.sender.
+        IERC20(optionAddress).safeTransfer(to, flashLoanQuantity);
+        emit FlashOpened(msg.sender, flashLoanQuantity, loanRemainder);
+        return loanRemainder;
     }
 
     /**
@@ -182,23 +374,13 @@ library PrimitiveRouterLib {
      * @param   optionToken The address of the option contract.
      * @param   receiver The underlyingTokens are sent to the receiver address.
      */
-    function safeExerciseWithETH(IOption optionToken, address receiver, IWETH weth)
+    function safeExerciseWithETH(IOption optionToken, address receiver, IWETH weth, uint256 inputOptions)
         internal
         returns (uint256, uint256)
     {
         require(msg.value > 0, "ERR_ZERO");
         // Require one of the option's assets to be WETH.
         require(optionToken.getStrikeTokenAddress() == address(weth), "ERR_NOT_WETH");
-        // Calculate quantity of optionTokens needed to burn.
-        // An ether put option with strike price $300 has a "base" value of 300, and a "quote" value of 1.
-        // To calculate how many options are needed to be burned, we need to cancel out the "quote" units.
-        // The input strike quantity can be multiplied by the strike ratio to cancel out "quote" units.
-        // 1 ether (quote units) * 300 (base units) / 1 (quote units) = 300 inputOptions
-        uint256 inputOptions =
-            PrimitiveRouterLib.getProportionalLongOptions(
-                optionToken,
-                msg.value
-            );
 
         // Wrap the ethers into WETH, and send the WETH to the option contract to prepare for calling exerciseOptions().
         safeTransferETHFromWETH(
@@ -220,6 +402,44 @@ library PrimitiveRouterLib {
     }
 
     /**
+     * @dev     Burn optionTokens and redeemTokens to withdraw underlyingTokens.
+     * @notice  The redeemTokens to burn is equal to the optionTokens * strike ratio.
+     *          inputOptions = inputRedeems / strike ratio = outUnderlyings
+     * @param   optionToken The address of the option contract.
+     * @param   closeQuantity Quantity of optionTokens to burn.
+     *          (Implictly will burn the strike ratio quantity of redeemTokens).
+     * @param   receiver The underlyingTokens are sent to the receiver address.
+     */
+    function safeClose(
+        IOption optionToken,
+        uint256 closeQuantity,
+        address receiver,
+        uint256 inputRedeems
+    )
+        internal
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        require(closeQuantity > 0, "0");
+        IERC20(optionToken.redeemToken()).safeTransferFrom(
+            msg.sender,
+            address(optionToken),
+            inputRedeems
+        );
+        if (optionToken.getExpiryTime() >= now)
+            IERC20(address(optionToken)).safeTransferFrom(
+                msg.sender,
+                address(optionToken),
+                closeQuantity
+            );
+        emit Closed(msg.sender, address(optionToken), closeQuantity);
+        return optionToken.closeOptions(receiver);
+    }
+
+    /**
      * @dev     Swaps strikeTokens to underlyingTokens using the strike ratio as the exchange rate.
      * @notice  Burns optionTokens, option contract receives strikeTokens, user receives underlyingTokens.
      * @param   optionToken The address of the option contract.
@@ -231,12 +451,8 @@ library PrimitiveRouterLib {
         uint256 exerciseQuantity,
         address receiver
     ) internal returns (uint256, uint256) {
+        require(exerciseQuantity > 0, "0");
         // Calculate quantity of strikeTokens needed to exercise quantity of optionTokens.
-        uint256 inputStrikes =
-            PrimitiveRouterLib.getProportionalShortOptions(
-                optionToken,
-                exerciseQuantity
-            );
         IERC20(address(optionToken)).safeTransferFrom(
             msg.sender,
             address(optionToken),
@@ -245,7 +461,10 @@ library PrimitiveRouterLib {
         IERC20(optionToken.getStrikeTokenAddress()).safeTransferFrom(
             msg.sender,
             address(optionToken),
-            inputStrikes
+            getProportionalShortOptions(
+                optionToken,
+                exerciseQuantity
+            )
         );
         emit Exercised(msg.sender, address(optionToken), exerciseQuantity);
         return
@@ -254,6 +473,54 @@ library PrimitiveRouterLib {
                 exerciseQuantity,
                 new bytes(0)
             );
+    }
+
+    function _swapForUnderlying(
+        IOption optionToken,
+        uint256 amountOptions,
+        bytes memory params,
+        IUniswapV2Factory factory
+    ) internal {
+        require(msg.value > 0, "0");
+        address redeemToken = optionToken.redeemToken();
+        address underlyingToken = optionToken.getUnderlyingTokenAddress();
+        IUniswapV2Pair pair =
+            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
+
+        // Receives 0 quoteTokens and `amountOptions` of underlyingTokens to `this` contract address.
+        // Then executes `flashMintShortOptionsThenSwap`.
+        uint256 amount0Out =
+            pair.token0() == underlyingToken ? amountOptions : 0;
+        uint256 amount1Out =
+            pair.token0() == underlyingToken ? 0 : amountOptions;
+
+        // Borrow the amountOptions quantity of underlyingTokens and execute the callback function using params.
+        pair.swap(amount0Out, amount1Out, address(this), params);
+    }
+
+    function _swapForRedeem(
+        IOption optionToken,
+        uint256 amountRedeems,
+        bytes memory params,
+        IUniswapV2Factory factory
+    ) internal {
+        address redeemToken = optionToken.redeemToken();
+        address underlyingToken = optionToken.getUnderlyingTokenAddress();
+        IUniswapV2Pair pair =
+            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
+
+        // Build the path to get the appropriate reserves to borrow from, and then pay back.
+        // We are borrowing from reserve1 then paying it back mostly in reserve0.
+        // Borrowing redeemTokens, paying back in underlyingTokens (normal swap).
+        // Pay any remainder in underlyingTokens.
+
+        // Receives 0 underlyingTokens and `amountRedeems` of redeemTokens to `this` contract address.
+        // Then executes `flashCloseLongOptionsThenSwap`.
+        uint256 amount0Out = pair.token0() == redeemToken ? amountRedeems : 0;
+        uint256 amount1Out = pair.token0() == redeemToken ? 0 : amountRedeems;
+
+        // Borrow the amountRedeems quantity of redeemTokens and execute the callback function using params.
+        pair.swap(amount0Out, amount1Out, address(this), params);
     }
 
     /**
@@ -390,6 +657,8 @@ library PrimitiveRouterLib {
         address to,
         uint256 amount
     ) internal {
+        require(amount > 0, "0");
+
         // Deposit the ethers received from amount into the WETH contract.
         weth.deposit.value(amount)();
 
