@@ -31,27 +31,32 @@ pragma solidity ^0.6.2;
 import {Context} from "@openzeppelin/contracts/GSN/Context.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-
-// WETH Interface
+// Primitive
 import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
+import {Registered} from "./Registered.sol";
+// WETH Interface
 import {IWETH} from "../interfaces/IWETH.sol";
 
 import "hardhat/console.sol";
 
-abstract contract PrimitiveConnector is Context {
+abstract contract PrimitiveConnector is Registered, Context {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
 
     IWETH internal _weth;
-    IPrimitive internal _router;
+    IPrimitiveRouter internal _primitiveRouter;
     mapping(address => mapping(address => bool)) internal _approved;
 
     // ===== Constructor =====
 
-    constructor(address weth_, address router_) public {
+    constructor(
+        address weth_,
+        address primitiveRouter_,
+        address registry_
+    ) public Registered(registry_) {
         require(address(weth_) == address(0x0), "Connector: INITIALIZED");
         _weth = IWETH(weth_);
-        _router = IPrimitiveRouter(router_);
-        checkApproval(weth_, router_);
+        _primitiveRouter = IPrimitiveRouter(primitiveRouter_);
+        checkApproval(weth_, primitiveRouter_);
     }
 
     // ===== Functions =====
@@ -76,7 +81,7 @@ abstract contract PrimitiveConnector is Context {
      */
     function _depositETH() internal returns (bool) {
         if (msg.value > 0) {
-            _weth.deposit.value(msg.value)("");
+            _weth.deposit.value(msg.value)();
             return true;
         }
         return false;
@@ -108,7 +113,7 @@ abstract contract PrimitiveConnector is Context {
         returns (bool)
     {
         if (quantity > 0) {
-            _router.transferFromCaller(token, quantity);
+            _primitiveRouter.transferFromCaller(token, quantity);
         }
         return true;
     }
@@ -132,11 +137,46 @@ abstract contract PrimitiveConnector is Context {
         address underlying = optionToken.getUnderlyingTokenAddress();
         uint256 quantity = IERC20(underlying).balanceOf(address(this));
         if (quantity > 0) {
-            IERC20(underlying).safeTransfer(optionAddress, quantity);
+            IERC20(underlying).safeTransfer(address(optionToken), quantity);
             return optionToken.mintOptions(address(this));
         }
 
         return (0, 0);
+    }
+
+    function _closeOptions(IOption optionToken) internal returns (uint256) {
+        address redeem = optionToken.redeemToken();
+        uint256 quantity = IERC20(redeem).balanceOf(address(this));
+        IERC20(redeem).safeTransfer(address(optionToken), quantity);
+
+        if (optionToken.getExpiryTime() >= now) {
+            IERC20(address(optionToken)).safeTransfer(
+                address(optionToken),
+                getProportionalLongOptions(optionToken, quantity)
+            );
+        }
+
+        (, , uint256 outputUnderlyings) =
+            optionToken.closeOptions(address(this));
+        return outputUnderlyings;
+    }
+
+    function _exerciseOptions(IOption optionToken, uint256 amount)
+        internal
+        returns (uint256)
+    {
+        address strike = optionToken.getStrikeTokenAddress();
+        uint256 quantity = IERC20(strike).balanceOf(address(this));
+        IERC20(strike).safeTransfer(address(optionToken), quantity);
+        IERC20(address(optionToken)).safeTransfer(address(optionToken), amount);
+        return optionToken.exerciseOptions(getCaller(), amount, new bytes(0));
+    }
+
+    function _redeemOptions(IOption optionToken) internal returns (uint256) {
+        address redeem = optionToken.redeemToken();
+        uint256 quantity = IERC20(redeem).balanceOf(address(this));
+        IERC20(redeem).safeTransfer(address(optionToken), quantity);
+        return optionToken.redeemStrikeTokens(getCaller());
     }
 
     // ===== Fallback =====
@@ -150,11 +190,11 @@ abstract contract PrimitiveConnector is Context {
         return _weth;
     }
 
-    function getRouter() public view returns (IPrimitiveRouter) {
-        return _router;
+    function getPrimitiveRouter() public view returns (IPrimitiveRouter) {
+        return _primitiveRouter;
     }
 
     function getCaller() public view returns (address) {
-        return _router.getCaller();
+        return _primitiveRouter.getCaller();
     }
 }
