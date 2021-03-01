@@ -33,63 +33,15 @@ import {
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 
 interface IPrimitiveRouter {
-    // ==== Flash Functions ====
+    function executeCallCore(bytes calldata params) external payable;
 
-    function flashMintShortOptionsThenSwap(
-        address optionAddress,
-        uint256 flashLoanQuantity,
-        uint256 maxPremium,
-        address to
-    ) external payable returns (uint256, uint256);
+    function executeCallUni(bytes calldata params) external payable;
 
-    function flashCloseLongOptionsThenSwap(
-        address optionAddress,
-        uint256 flashLoanQuantity,
-        uint256 minPayout,
-        address to
-    ) external returns (uint256, uint256);
-
-    function openFlashLong(
-        IOption optionToken,
-        uint256 amountOptions,
-        uint256 amountOutMin
-    ) external returns (bool);
-
-    function closeFlashLong(
-        IOption optionToken,
-        uint256 amountRedeems,
-        uint256 minPayout
-    ) external returns (bool);
-
-    // ==== Liquidity Functions ====
-
-    function addShortLiquidityWithUnderlying(
-        address optionAddress,
-        uint256 quantityOptions,
-        uint256 amountBMax,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    )
+    function transferFromCaller(address token, uint256 amount)
         external
-        returns (
-            uint256,
-            uint256,
-            uint256
-        );
-
-    function removeShortLiquidityThenCloseOptions(
-        address optionAddress,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256, uint256);
+        returns (bool);
 
     // ==== View ====
 
-    function router() external view returns (IUniswapV2Router02);
-
-    function factory() external view returns (IUniswapV2Factory);
+    function getCaller() external view returns (address);
 }

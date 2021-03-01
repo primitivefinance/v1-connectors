@@ -36,7 +36,7 @@ import {
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Primitive
 import {CoreLib} from "../libraries/CoreLib.sol";
-import {IPrimitiveCore, IOption} from "./interfaces/IPrimitiveCore.sol";
+import {IPrimitiveCore, IOption} from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 
 import "hardhat/console.sol";
@@ -88,11 +88,12 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeMintWithETH(IOption optionToken)
         public
         payable
+        override
         returns (uint256, uint256)
     {
         // Check to make sure we are minting a WETH call option.
         require(
-            address(weth) == optionToken.getUnderlyingTokenAddress(),
+            address(_weth) == optionToken.getUnderlyingTokenAddress(),
             "PrimitiveCore: NOT_WETH"
         );
         _depositETH();
@@ -112,6 +113,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeExerciseWithETH(IOption optionToken)
         public
         payable
+        override
         returns (uint256, uint256)
     {
         require(msg.value > 0, "PrimitiveCore: ZERO");
@@ -124,7 +126,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         _depositETH();
         uint256 long =
             CoreLib.getProportionalLongOptions(optionToken, msg.value);
-        _transferFromCaller(address(optionAddress), long);
+        _transferFromCaller(address(optionToken), long);
 
         (uint256 strikes, uint256 options) =
             _exerciseOptions(optionToken, long);
@@ -143,6 +145,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      */
     function safeExerciseForETH(IOption optionToken, uint256 exerciseQuantity)
         public
+        override
         returns (uint256, uint256)
     {
         address underlying = optionToken.getUnderlyingTokenAddress();
@@ -163,7 +166,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
             exerciseQuantity
         );
 
-        (uint256 strike, uint256 options) =
+        (uint256 strikesPaid, uint256 options) =
             optionToken.exerciseOptions(
                 address(this),
                 exerciseQuantity,
@@ -172,7 +175,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
 
         // Converts the withdrawn WETH to ethers, then sends the ethers to the getCaller() address.
         _withdrawETH();
-        return (strike, options);
+        return (strikesPaid, options);
     }
 
     /**
@@ -184,6 +187,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      */
     function safeRedeemForETH(IOption optionToken, uint256 redeemQuantity)
         public
+        override
         returns (uint256)
     {
         address strike = optionToken.getStrikeTokenAddress();
@@ -193,7 +197,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         // Pull redeems
         _transferFromCaller(redeem, redeemQuantity);
         // Push redeems to option contract
-        IERC20(redeem).safeTransfer(address(optionToken), quantity);
+        IERC20(redeem).safeTransfer(address(optionToken), redeemQuantity);
         uint256 short = optionToken.redeemStrikeTokens(address(this));
         _withdrawETH();
         emit Redeemed(getCaller(), address(optionToken), redeemQuantity);
@@ -211,6 +215,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      */
     function safeCloseForETH(IOption optionToken, uint256 closeQuantity)
         public
+        override
         returns (
             uint256,
             uint256,

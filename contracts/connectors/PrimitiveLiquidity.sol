@@ -45,6 +45,7 @@ import {
 } from "../interfaces/IPrimitiveLiquidity.sol";
 // Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
+import {CoreLib} from "../libraries/CoreLib.sol";
 
 import "hardhat/console.sol";
 
@@ -83,7 +84,6 @@ contract PrimitiveLiquidity is
         IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 _factory contract to get pair addresses from
     IUniswapV2Router02 internal _router =
         IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // The Uniswap contract used to interact with the protocol
-
 
     // ===== Constructor =====
     constructor(
@@ -132,7 +132,8 @@ contract PrimitiveLiquidity is
         _transferFromCaller(underlying, quantityOptions.add(amountBMax));
         // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
         IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
-        (, uint256 short) = IOption(optionAddress).mintOptions(address(this));
+        (, uint256 outputRedeems) =
+            IOption(optionAddress).mintOptions(address(this));
 
         {
             // scope for adding exact liquidity, avoids stack too deep errors
@@ -160,7 +161,7 @@ contract PrimitiveLiquidity is
             // Return remaining tokens
             _transferToCaller(underlying);
             _transferToCaller(redeem);
-            _transferToCaller(optionAddress);
+            _transferToCaller(address(optionToken));
         }
 
         emit AddLiquidity(getCaller(), optionAddress, liquidity);
@@ -188,6 +189,7 @@ contract PrimitiveLiquidity is
     )
         public
         payable
+        override
         returns (
             uint256,
             uint256,
@@ -206,10 +208,11 @@ contract PrimitiveLiquidity is
         require(underlying == address(_weth), "PrimitiveLiquidity: NOT_WETH");
 
         // Wraps `msg.value` to Weth.
-        _depositEth();
+        _depositETH();
         // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
         IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
-        (, uint256 short) = IOption(optionAddress).mintOptions(address(this));
+        (, uint256 outputRedeems) =
+            IOption(optionAddress).mintOptions(address(this));
 
         {
             // scope for adding exact liquidity, avoids stack too deep errors
@@ -237,7 +240,7 @@ contract PrimitiveLiquidity is
             // Return remaining tokens
             _withdrawETH();
             _transferToCaller(redeem);
-            _transferToCaller(optionAddress);
+            _transferToCaller(address(optionToken));
         }
 
         emit AddLiquidity(getCaller(), optionAddress, liquidity);
@@ -299,53 +302,52 @@ contract PrimitiveLiquidity is
         uint256 deadline
     ) public override nonReentrant returns (uint256) {
         IOption optionToken = IOption(optionAddress);
-        (IUniswapV2Pair pair, address underlying, address redeem) = getOptionPair(optionToken);
+        (IUniswapV2Pair pair, address underlying, address redeem) =
+            getOptionPair(optionToken);
         RemoveAmounts memory params;
         params.liquidity = liquidity;
-        params.amountAmin = amountAMin;
-        params.amountBMin = amountBmin;
+        params.amountAMin = amountAMin;
+        params.amountBMin = amountBMin;
         params.deadline = deadline;
 
         _transferFromCaller(address(pair), liquidity);
         checkApproval(address(pair), address(_router));
-.
+
         (uint256 shortTokensWithdrawn, uint256 underlyingTokensWithdrawn) =
-            _removeLiquidity(
-                redeem,
-                underlying,
-                params
-            );
+            _removeLiquidity(redeem, underlying, params);
 
         uint256 long =
-            PrimitiveRouterLib.getProportionalLongOptions(
+            CoreLib.getProportionalLongOptions(
                 optionToken,
                 shortTokensWithdrawn
             );
-    
+
         _transferFromCaller(address(optionToken), long);
 
         uint256 proceeds = _closeOptions(optionToken);
 
         _transferToCaller(redeem);
-        if(underlying == address(_weth)) {
+        if (underlying == address(_weth)) {
             _withdrawETH();
         } else {
-        _transferToCaller(underlying);
+            _transferToCaller(underlying);
         }
-        return (
-            underlyingTokensWithdrawn.add(proceeds)
-        );
+        return (underlyingTokensWithdrawn.add(proceeds));
     }
 
     struct RemoveAmounts {
-        uint liquidity;
-        uint amountAMin;
-        uint amountBMin;
-        uint deadline;
+        uint256 liquidity;
+        uint256 amountAMin;
+        uint256 amountBMin;
+        uint256 deadline;
     }
 
-    function _removeLiquidity(address tokenA, address tokenB, RemoveAmounts memory params) internal returns (uint, uint) {
-        return 
+    function _removeLiquidity(
+        address tokenA,
+        address tokenB,
+        RemoveAmounts memory params
+    ) internal returns (uint256, uint256) {
+        return
             _router.removeLiquidity(
                 tokenA,
                 tokenB,
@@ -357,7 +359,6 @@ contract PrimitiveLiquidity is
             );
     }
 
-
     function removeShortLiquidityThenCloseOptionsWithPermit(
         address optionAddress,
         uint256 liquidity,
@@ -368,7 +369,7 @@ contract PrimitiveLiquidity is
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external returns (uint256) {
+    ) external override returns (uint256) {
         IOption optionToken = IOption(optionAddress);
         uint256 liquidity_ = liquidity;
         uint256 deadline_ = deadline;
@@ -379,7 +380,7 @@ contract PrimitiveLiquidity is
             uint8 v_ = v;
             bytes32 r_ = r;
             bytes32 s_ = s;
-            (IUniswapV2Pair pair,  ,) = getOptionPair(optionToken);
+            (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
             pair.permit(
                 getCaller(),
                 address(this),
@@ -411,6 +412,7 @@ contract PrimitiveLiquidity is
     function getOptionPair(IOption option)
         public
         view
+        override
         onlyRegistered(option)
         returns (
             IUniswapV2Pair,
@@ -418,18 +420,18 @@ contract PrimitiveLiquidity is
             address
         )
     {
-        address redeemToken = optionToken.redeemToken();
-        address underlyingToken = optionToken.getUnderlyingTokenAddress();
+        address redeemToken = option.redeemToken();
+        address underlyingToken = option.getUnderlyingTokenAddress();
         IUniswapV2Pair pair =
             IUniswapV2Pair(_factory.getPair(redeemToken, underlyingToken));
         return (pair, underlyingToken, redeemToken);
     }
 
-    function getRouter() public view returns (IUniswapV2Router02) {
+    function getRouter() public view override returns (IUniswapV2Router02) {
         return _router;
     }
 
-    function getFactory() public view returns (IUniswapV2Factory) {
+    function getFactory() public view override returns (IUniswapV2Factory) {
         return _factory;
     }
 }

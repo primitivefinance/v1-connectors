@@ -60,11 +60,7 @@ library SwapsLib {
         // Outstanding is the cost remaining, should be 0 in most cases.
         // Payout is the `premium` that the original caller receives in underlyingTokens.
         (uint256 payout, uint256 outstanding) =
-            PrimitiveRouterLib.getClosePremium(
-                router,
-                optionToken,
-                flashLoanQuantity
-            );
+            getClosePremium(router, optionToken, flashLoanQuantity);
 
         // In most cases there will be an underlying payout, which is subtracted from the flashLoanQuantity.
         uint256 cost;

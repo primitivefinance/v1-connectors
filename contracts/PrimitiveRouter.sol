@@ -28,6 +28,7 @@ pragma solidity ^0.6.2;
  */
 
 // Open Zeppelin
+import {Context} from "@openzeppelin/contracts/GSN/Context.sol";
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
@@ -49,7 +50,6 @@ import {
     IOption,
     IERC20
 } from "./interfaces/IPrimitiveRouter.sol";
-import {PrimitiveRouterLib} from "./libraries/PrimitiveRouterLib.sol";
 import {
     IRegistry
 } from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
@@ -70,13 +70,17 @@ contract Route {
 contract PrimitiveRouter is
     IPrimitiveRouter,
     IUniswapV2Callee,
-    ReentrancyGuard
+    ReentrancyGuard,
+    Context
 {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
-    IUniswapV2Factory public override factory =
+    // fix for testing
+    IUniswapV2Factory public factory =
         IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 factory contract to get pair addresses from
+    IUniswapV2Router02 public router;
+
     IWETH public weth;
     IRegistry public registry;
     // TODO interfaces for these
@@ -84,7 +88,7 @@ contract PrimitiveRouter is
     address public uni;
 
     event Initialized(address indexed from); // Emmitted on deployment
-    event Executed(address indexed from, address indexed to, bytes calldata params);
+    event Executed(address indexed from, address indexed to, bytes params);
 
     address internal constant _NO_CALLER = address(0x0);
     /**
@@ -122,9 +126,8 @@ contract PrimitiveRouter is
         core = _core;
         _uni = _uni;
         registry = IRegistry(registry_);
-        emit Initialized(msg.sender);
-
         _route = new Route();
+        emit Initialized(msg.sender);
     }
 
     // ===== Operations =====
@@ -137,6 +140,7 @@ contract PrimitiveRouter is
      */
     function transferFromCaller(address token, uint256 amount)
         public
+        override
         isExec
         returns (bool)
     {
@@ -148,16 +152,16 @@ contract PrimitiveRouter is
         return true;
     }
 
-    // ===== Execute =====    
+    // ===== Execute =====
 
-    function executeCallCore(bytes calldata params) external payable {
+    function executeCallCore(bytes calldata params) external payable override {
         _CALLER = _msgSender();
         _route.executeCall(core, params);
         _CALLER = _NO_CALLER;
         emit Executed(_msgSender(), address(core), params);
     }
 
-    function executeCallUni(bytes calldata params) external payable {
+    function executeCallUni(bytes calldata params) external payable override {
         _CALLER = _msgSender();
         _route.executeCall(uni, params);
         _CALLER = _NO_CALLER;
@@ -202,7 +206,7 @@ contract PrimitiveRouter is
 
     // ===== Execution Context =====
 
-    function getCaller() public view returns (address) {
+    function getCaller() public view override returns (address) {
         return _CALLER;
     }
 }

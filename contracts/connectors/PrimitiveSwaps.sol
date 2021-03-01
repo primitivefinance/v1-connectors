@@ -57,7 +57,8 @@ import "hardhat/console.sol";
 contract PrimitiveSwaps is
     PrimitiveConnector,
     IPrimitiveSwaps,
-    IUniswapV2Callee
+    IUniswapV2Callee,
+    ReentrancyGuard
 {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
@@ -154,6 +155,7 @@ contract PrimitiveSwaps is
     function openFlashLongWithETH(IOption optionToken, uint256 amountOptions)
         external
         payable
+        override
         returns (bool)
     {
         require(msg.value > 0, "PrimitiveSwaps: ZERO");
@@ -227,7 +229,7 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountRedeems,
         uint256 minPayout
-    ) external nonReentrant returns (bool) {
+    ) external override nonReentrant returns (bool) {
         // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
         _flashSwap(
@@ -264,7 +266,7 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 quantity,
         uint256 maxPremium
-    ) internal payable onlySelf returns (uint256, uint256) {
+    ) internal onlySelf returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
@@ -272,7 +274,7 @@ contract PrimitiveSwaps is
         _mintOptions(optionToken);
         // Get the repayment amounts
         (uint256 premium, uint256 redeemPremium) =
-            SwapLib.repay(_router, optionToken, quantity);
+            SwapsLib.repayOpen(_router, optionToken, quantity);
         // If premium is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
         if (premium > 0) {
             // Pull underlyingTokens from the original _msgSender() to pay the remainder of the flash swap.
@@ -306,7 +308,7 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 quantity,
         uint256 maxPremium
-    ) internal payable onlySelf returns (uint256, uint256) {
+    ) internal onlySelf returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
@@ -315,7 +317,7 @@ contract PrimitiveSwaps is
         _mintOptions(optionToken);
 
         (uint256 premium, uint256 redeemPremium) =
-            SwapLib.repay(_router, optionToken, quantity);
+            SwapsLib.repayOpen(_router, optionToken, quantity);
 
         // If premium is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
         if (premium > 0) {
@@ -507,18 +509,18 @@ contract PrimitiveSwaps is
             address
         )
     {
-        address redeemToken = optionToken.redeemToken();
-        address underlyingToken = optionToken.getUnderlyingTokenAddress();
+        address redeemToken = option.redeemToken();
+        address underlyingToken = option.getUnderlyingTokenAddress();
         IUniswapV2Pair pair =
             IUniswapV2Pair(_factory.getPair(redeemToken, underlyingToken));
         return (pair, underlyingToken, redeemToken);
     }
 
-    function getRouter() public view returns (IUniswapV2Router02) {
+    function getRouter() public view override returns (IUniswapV2Router02) {
         return _router;
     }
 
-    function getFactory() public view returns (IUniswapV2Factory) {
+    function getFactory() public view override returns (IUniswapV2Factory) {
         return _factory;
     }
 }

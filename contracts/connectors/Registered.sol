@@ -31,6 +31,9 @@ pragma solidity ^0.6.2;
 import {
     IRegistry
 } from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
+import {
+    IOption
+} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 
 contract Registered {
     IRegistry internal _registry;

@@ -34,8 +34,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 // Primitive
 import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
 import {Registered} from "./Registered.sol";
+import {
+    IOption
+} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 // WETH Interface
 import {IWETH} from "../interfaces/IWETH.sol";
+import {CoreLib} from "../libraries/CoreLib.sol";
 
 import "hardhat/console.sol";
 
@@ -152,7 +156,7 @@ abstract contract PrimitiveConnector is Registered, Context {
         if (optionToken.getExpiryTime() >= now) {
             IERC20(address(optionToken)).safeTransfer(
                 address(optionToken),
-                getProportionalLongOptions(optionToken, quantity)
+                CoreLib.getProportionalLongOptions(optionToken, quantity)
             );
         }
 
@@ -163,7 +167,7 @@ abstract contract PrimitiveConnector is Registered, Context {
 
     function _exerciseOptions(IOption optionToken, uint256 amount)
         internal
-        returns (uint256)
+        returns (uint256, uint256)
     {
         address strike = optionToken.getStrikeTokenAddress();
         uint256 quantity = IERC20(strike).balanceOf(address(this));
