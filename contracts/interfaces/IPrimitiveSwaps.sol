@@ -28,20 +28,38 @@ import {
     IUniswapV2Factory
 } from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import {
-    IOption,
-    IERC20
+    IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 
-interface IPrimitiveRouter {
-    function executeCallCore(bytes calldata params) external payable;
+interface IPrimitiveSwaps {
+    // ==== Flash Functions ====
 
-    function executeCallUni(bytes calldata params) external payable;
+    function openFlashLong(
+        IOption optionToken,
+        uint256 amountOptions,
+        uint256 maxPremium
+    ) external returns (bool);
 
-    function transferFromCaller(address token, uint256 amount)
+    function openFlashLongWithETH(IOption optionToken, uint256 amountOptions)
         external
+        payable
         returns (bool);
+
+    function closeFlashLong(
+        IOption optionToken,
+        uint256 amountRedeems,
+        uint256 minPayout
+    ) external returns (bool);
+
+    function closeFlashLongForETH(
+        IOption optionToken,
+        uint256 amountRedeems,
+        uint256 minPayout
+    ) external returns (bool);
 
     // ==== View ====
 
-    function getCaller() external view returns (address);
+    function getRouter() external view returns (IUniswapV2Router02);
+
+    function getFactory() external view returns (IUniswapV2Factory);
 }

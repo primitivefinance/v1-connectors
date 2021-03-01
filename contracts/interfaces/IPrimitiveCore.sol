@@ -22,26 +22,33 @@
 pragma solidity ^0.6.2;
 
 import {
-    IUniswapV2Router02
-} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import {
-    IUniswapV2Factory
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import {
-    IOption,
-    IERC20
+    IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 
-interface IPrimitiveRouter {
-    function executeCallCore(bytes calldata params) external payable;
-
-    function executeCallUni(bytes calldata params) external payable;
-
-    function transferFromCaller(address token, uint256 amount)
+interface IPrimitiveCore {
+    function safeMintWithETH(IOption optionToken)
         external
-        returns (bool);
+        payable
+        returns (uint256, uint256);
 
-    // ==== View ====
+    function safeExerciseWithETH(IOption optionToken)
+        external
+        payable
+        returns (uint256, uint256);
 
-    function getCaller() external view returns (address);
+    function safeExerciseForETH(IOption optionToken, uint256 exerciseQuantity)
+        external
+        returns (uint256, uint256);
+
+    function safeRedeemForETH(IOption optionToken, uint256 redeemQuantity)
+        external
+        returns (uint256);
+
+    function safeCloseForETH(IOption optionToken, uint256 closeQuantity)
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
 }

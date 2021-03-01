@@ -22,12 +22,13 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   A user-friendly smart contract to interface with the Primitive and Uniswap protocols.
+ * @title   The execution entry point for using Primitive Connector contracts.
  * @notice  Primitive Router - @primitivefi/v1-connectors@v1.3.0
  * @author  Primitive
  */
 
 // Open Zeppelin
+import {Context} from "@openzeppelin/contracts/GSN/Context.sol";
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
@@ -49,25 +50,37 @@ import {
     IOption,
     IERC20
 } from "./interfaces/IPrimitiveRouter.sol";
-import {PrimitiveRouterLib} from "./libraries/PrimitiveRouterLib.sol";
 import {
-  IRegistry
+    IRegistry
 } from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 
 import "hardhat/console.sol";
 
+contract Route {
+    function executeCall(address target, bytes calldata params)
+        external
+        payable
+    {
+        (bool success, bytes memory returnData) =
+            target.call.value(msg.value)(params);
+        require(success, "Route: EXECUTION_FAIL");
+    }
+}
+
 contract PrimitiveRouter is
     IPrimitiveRouter,
     IUniswapV2Callee,
-    ReentrancyGuard
+    ReentrancyGuard,
+    Context
 {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
-    IUniswapV2Factory public override factory =
+    // fix for testing
+    IUniswapV2Factory public factory =
         IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 factory contract to get pair addresses from
-    IUniswapV2Router02 public override router =
-        IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // The Uniswap contract used to interact with the protocol
+    IUniswapV2Router02 public router;
+
     IWETH public weth;
     IRegistry public registry;
     // TODO interfaces for these
@@ -75,54 +88,84 @@ contract PrimitiveRouter is
     address public uni;
 
     event Initialized(address indexed from); // Emmitted on deployment
-    event FlashOpened(address indexed from, uint256 quantity, uint256 premium); // Emmitted on flash opening a long position
-    event FlashClosed(address indexed from, uint256 quantity, uint256 payout);
-    event WroteOption(address indexed from, uint256 quantity);
-    event Minted(
-        address indexed from,
-        address indexed optionToken,
-        uint256 longQuantity,
-        uint256 shortQuantity
-    );
-    event Exercised(
-        address indexed from,
-        address indexed optionToken,
-        uint256 quantity
-    );
-    event Redeemed(
-        address indexed from,
-        address indexed optionToken,
-        uint256 quantity
-    );
-    event Closed(
-        address indexed from,
-        address indexed optionToken,
-        uint256 quantity
-    );
+    event Executed(address indexed from, address indexed to, bytes params);
+
+    address internal constant _NO_CALLER = address(0x0);
+    /**
+     * @dev If the `execute` function was called this block.
+     */
+    bool private _EXECUTING;
+    /**
+     * @dev If _EXECUTING, the orginal `msg.sender` of the execute call.
+     */
+    address internal _CALLER = _NO_CALLER;
+
+    /**
+     * @notice  A mutex to use during an `execute` call.
+     */
+    modifier isExec() {
+        require(_CALLER != _NO_CALLER, "Router: NO_CALLER");
+        require(!_EXECUTING, "Router: IN_EXECUTION");
+        _EXECUTING = true;
+        _;
+        _EXECUTING = false;
+    }
+
+    Route internal _route;
 
     // ===== Constructor =====
 
-    constructor(address weth_, address registry_, address _core, address _uni) public {
+    constructor(
+        address weth_,
+        address registry_,
+        address _core,
+        address _uni
+    ) public {
         require(address(weth) == address(0x0), "INIT");
         weth = IWETH(weth_);
         core = _core;
         _uni = _uni;
-        emit Initialized(msg.sender);
         registry = IRegistry(registry_);
+        _route = new Route();
+        emit Initialized(msg.sender);
     }
 
-    receive() external payable {
-        assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
+    // ===== Operations =====
+
+    /**
+     * @notice  Transfers ERC20 tokens from the executing `_CALLER` to the executing `_CONNECTOR`.
+     * @param   token The address of the ERC20.
+     * @param   amount The amount of ERC20 to transfer.
+     * @return  Whether or not the transfer succeeded.
+     */
+    function transferFromCaller(address token, uint256 amount)
+        public
+        override
+        isExec
+        returns (bool)
+    {
+        IERC20(token).safeTransferFrom(
+            getCaller(), // Account to pull from
+            _msgSender(), // The connector
+            amount
+        );
+        return true;
     }
 
-    function executeCallCore(bytes calldata params) external payable {
-        (bool success, bytes memory returnData) = core.call{value: msg.value}(params);
-        require(success, "EXECUTION_FAIL");
+    // ===== Execute =====
+
+    function executeCallCore(bytes calldata params) external payable override {
+        _CALLER = _msgSender();
+        _route.executeCall(core, params);
+        _CALLER = _NO_CALLER;
+        emit Executed(_msgSender(), address(core), params);
     }
 
-    function executeCallUni(bytes calldata params) external payable {
-        (bool success, bytes memory returnData) = uni.call{value: msg.value}(params);
-        require(success, "EXECUTION_FAIL");
+    function executeCallUni(bytes calldata params) external payable override {
+        _CALLER = _msgSender();
+        _route.executeCall(uni, params);
+        _CALLER = _NO_CALLER;
+        emit Executed(_msgSender(), address(uni), params);
     }
 
     // ===== Callback Implementation =====
@@ -140,12 +183,30 @@ contract PrimitiveRouter is
         uint256 amount1,
         bytes calldata data
     ) external override {
-      assert(msg.sender == factory.getPair(IUniswapV2Pair(msg.sender).token0(), IUniswapV2Pair(msg.sender).token1())); /// ensure that msg.sender is actually a V2 pair
-      (bool success, bytes memory returnData) = address(this).call(data);
-      require(
-          success &&
-              (returnData.length == 0 || abi.decode(returnData, (bool))),
-          "UNI"
-      );
+        assert(
+            msg.sender ==
+                factory.getPair(
+                    IUniswapV2Pair(msg.sender).token0(),
+                    IUniswapV2Pair(msg.sender).token1()
+                )
+        ); /// ensure that msg.sender is actually a V2 pair
+        (bool success, bytes memory returnData) = address(this).call(data);
+        require(
+            success &&
+                (returnData.length == 0 || abi.decode(returnData, (bool))),
+            "UNI"
+        );
+    }
+
+    // ===== Fallback =====
+
+    receive() external payable {
+        assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
+    }
+
+    // ===== Execution Context =====
+
+    function getCaller() public view override returns (address) {
+        return _CALLER;
     }
 }
