@@ -36,10 +36,8 @@ import {
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Primitive
 import {CoreLib} from "../libraries/CoreLib.sol";
-import {IPrimitiveCore, IOption} from "../interfaces/IPrimitiveCore.sol";
+import {IPrimitiveCore, IOption, IERC20Permit} from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
-import {IERC20Permit} from "../interfaces/IERC20Permit.sol";
-
 
 import "hardhat/console.sol";
 

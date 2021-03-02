@@ -41,9 +41,9 @@ import {
     IUniswapV2Router02,
     IUniswapV2Factory,
     IUniswapV2Pair,
-    IOption
+    IOption,
+    IERC20Permit
 } from "../interfaces/IPrimitiveLiquidity.sol";
-import {IERC20Permit} from "../interfaces/IERC20Permit.sol";
 
 // Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
