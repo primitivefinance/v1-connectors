@@ -38,6 +38,8 @@ import {
 import {CoreLib} from "../libraries/CoreLib.sol";
 import {IPrimitiveCore, IOption} from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
+import {IERC20Permit} from "../interfaces/IERC20Permit.sol";
+
 
 import "hardhat/console.sol";
 
@@ -101,6 +103,31 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         emit Minted(_msgSender(), address(optionToken), long, short);
         return (long, short);
     }
+
+    /**
+     * @dev     Mints msg.value quantity of options and "quote" (option parameter) quantity of redeem tokens.
+     * @notice  This function is for options that have an EIP2612 (permit) enabled token as the underlying asset.
+     * @param   optionToken The address of the option token to mint.
+     */
+     function safeMintWithPermit
+         (IOption optionToken, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+         external
+         returns (uint256, uint256)
+     {
+         // Permit minting using the caller's underlying tokens
+         IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
+             getCaller(),
+             address(this),
+             uint256(-1),
+             deadline,
+             v,
+             r,
+             s
+         );
+         (uint256 long, uint256 short) = _mintOptions(optionToken);
+         emit Minted(_msgSender(), address(optionToken), long, short);
+         return (long, short);
+     }
 
     /**
      * @dev     Swaps msg.value of strikeTokens (ethers) to underlyingTokens.
