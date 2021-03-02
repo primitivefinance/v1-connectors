@@ -93,6 +93,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         public
         payable
         override
+        onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
         // Check to make sure we are minting a WETH call option.
