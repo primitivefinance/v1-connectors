@@ -103,9 +103,10 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     }
 
     /**
-     * @dev     Mints msg.value quantity of options and "quote" (option parameter) quantity of redeem tokens.
+     * @dev     Mints "amount" quantity of options and "quote" (option parameter) quantity of redeem tokens.
      * @notice  This function is for options that have an EIP2612 (permit) enabled token as the underlying asset.
      * @param   optionToken The address of the option token to mint.
+     * @param   amount The quantity of options to mint.
      */
      function safeMintWithPermit
          (IOption optionToken, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)

@@ -170,6 +170,17 @@ contract PrimitiveLiquidity is
         return (amountA, amountB, liquidity);
     }
 
+    /**
+     * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+     * @notice  Pulls underlying tokens from _msgSender() and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
+     *          underlyingToken -> redeemToken -> UNI-V2. Uses permit so user does not need to `approve()` our contracts.
+     * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
+     * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
+     * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
+     * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
+     * @param   to The address that receives UNI-V2 shares.
+     * @param   deadline The timestamp to expire a pending transaction.
+     */
     function addShortLiquidityWithUnderlyingWithPermit(
         address optionAddress,
         uint256 quantityOptions,
