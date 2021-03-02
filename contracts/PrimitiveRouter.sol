@@ -84,8 +84,11 @@ contract PrimitiveRouter is
     IWETH public weth;
     IRegistry public registry;
 
+    address public deployer;
+
     mapping(address => bool) public validConnectors;
     bool public initialized;
+    bool public halt;
 
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
@@ -111,6 +114,11 @@ contract PrimitiveRouter is
         _EXECUTING = false;
     }
 
+    modifier notHalted() {
+      require(halt == false, "CONTRACT_HALTED");
+      _;
+    }
+
     Route internal _route;
 
     // ===== Constructor =====
@@ -120,6 +128,7 @@ contract PrimitiveRouter is
         address registry_
     ) public {
         require(address(weth) == address(0x0), "INIT");
+        deployer = msg.sender;
         weth = IWETH(weth_);
         registry = IRegistry(registry_);
         _route = new Route();
@@ -137,12 +146,17 @@ contract PrimitiveRouter is
       address core,
       address liquidity,
       address swaps
-    ) external {
+    ) external notHalted {
       require(initialized == false, "ALREADY_INITIALIZED");
       initialized = true;
       validConnectors[core] = true;
       validConnectors[liquidity] = true;
       validConnectors[swaps] = true;
+    }
+
+    function halt() external {
+      require(deployer == msg.sender, "NOT_DEPLOYER");
+      halt = true;
     }
 
     // ===== Operations =====
@@ -157,6 +171,7 @@ contract PrimitiveRouter is
         public
         override
         isExec
+        notHalted
         returns (bool)
     {
         IERC20(token).safeTransferFrom(
@@ -169,7 +184,7 @@ contract PrimitiveRouter is
 
     // ===== Execute =====
 
-    function executeCall(address connector, bytes calldata params) external payable override {
+    function executeCall(address connector, bytes calldata params) external payable override notHalted {
         require(validConnectors[connector], "INVALID_CONNECTOR");
         _CALLER = _msgSender();
         _route.executeCall(connector, params);
@@ -191,7 +206,7 @@ contract PrimitiveRouter is
         uint256 amount0,
         uint256 amount1,
         bytes calldata data
-    ) external override {
+    ) external override notHalted {
         assert(
             msg.sender ==
                 factory.getPair(
@@ -209,7 +224,7 @@ contract PrimitiveRouter is
 
     // ===== Fallback =====
 
-    receive() external payable {
+    receive() external payable notHalted {
         assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
     }
 
