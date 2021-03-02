@@ -83,9 +83,9 @@ contract PrimitiveRouter is
 
     IWETH public weth;
     IRegistry public registry;
-    // TODO interfaces for these
-    address public core;
-    address public uni;
+
+    mapping(address => bool) public validConnectors;
+    bool public initialized;
 
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
@@ -117,17 +117,24 @@ contract PrimitiveRouter is
 
     constructor(
         address weth_,
-        address registry_,
-        address _core,
-        address _uni
+        address registry_
     ) public {
         require(address(weth) == address(0x0), "INIT");
         weth = IWETH(weth_);
-        core = _core;
-        _uni = _uni;
         registry = IRegistry(registry_);
         _route = new Route();
         emit Initialized(msg.sender);
+    }
+
+    function init(
+      address core,
+      address liquidity,
+      address swaps
+    ) external {
+      require(initialized == false, "ALREADY_INITIALIZED");
+      validConnectors[core] = true;
+      validConnectors[liquidity] = true;
+      validConnectors[swaps] = true;
     }
 
     // ===== Operations =====
@@ -154,18 +161,12 @@ contract PrimitiveRouter is
 
     // ===== Execute =====
 
-    function executeCallCore(bytes calldata params) external payable override {
+    function executeCall(address connector, bytes calldata params) external payable override {
+        require(validConnectors[connector], "INVALID_CONNECTOR");
         _CALLER = _msgSender();
-        _route.executeCall(core, params);
+        _route.executeCall(connector, params);
         _CALLER = _NO_CALLER;
-        emit Executed(_msgSender(), address(core), params);
-    }
-
-    function executeCallUni(bytes calldata params) external payable override {
-        _CALLER = _msgSender();
-        _route.executeCall(uni, params);
-        _CALLER = _NO_CALLER;
-        emit Executed(_msgSender(), address(uni), params);
+        emit Executed(_msgSender(), connector, params);
     }
 
     // ===== Callback Implementation =====
