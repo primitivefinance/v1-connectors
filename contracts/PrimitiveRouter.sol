@@ -117,17 +117,19 @@ contract PrimitiveRouter is
 
     constructor(
         address weth_,
-        address registry_,
-        address _core,
-        address _uni
+        address registry_
     ) public {
         require(address(weth) == address(0x0), "INIT");
         weth = IWETH(weth_);
-        core = _core;
-        _uni = _uni;
         registry = IRegistry(registry_);
         _route = new Route();
-        emit Initialized(msg.sender);
+    }
+
+    function init(address _core, address _uni) external {
+      require(core == address(0) && uni == address(0), "ALREADY_INITIALIZED");
+      core = _core;
+      uni = _uni;
+      emit Initialized(msg.sender);
     }
 
     // ===== Operations =====
