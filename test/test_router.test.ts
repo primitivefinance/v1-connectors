@@ -98,7 +98,7 @@ describe('PrimitiveRouter', () => {
   let underlyingToken, strikeToken
   let base, quote, expiry
   let Primitive, registry
-  let uniswapFactory, uniswapRouter, primitiveRouter
+  let uniswapFactory, uniswapRouter, primitiveRouter, primitiveLiquidity, primitiveCore, primitiveSwaps
   let premium, assertInvariant, reserves, reserve0, reserve1
   // regular deadline
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
@@ -164,6 +164,35 @@ describe('PrimitiveRouter', () => {
       uniswapFactory.address,
       registry.address,
     ])
+
+    primitiveCore = await setup.newPrimitiveCore(
+      Admin,
+      [
+        weth.address,
+        primitiveRouter.address,
+        registry.address
+      ]
+    )
+
+    primitiveLiquidity = await setup.newPrimitiveLiquidity(
+      Admin,
+      [
+        weth.address,
+        primitiveRouter.address,
+        registry.address
+      ]
+    )
+
+    primitiveSwaps = await setup.newPrimitiveSwaps(
+      Admin,
+      [
+        weth.address,
+        primitiveRouter.address,
+        registry.address
+      ]
+    )
+
+    await primitiveRouter.init(primitiveCore.address, primitiveLiquidity.address, primitiveSwaps.address)
 
     // Approve all tokens and contracts
     await batchApproval(

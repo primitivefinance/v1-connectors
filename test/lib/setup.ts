@@ -15,6 +15,10 @@ import OptionTemplateLib from '@primitivefi/contracts/artifacts/OptionTemplateLi
 import RedeemTemplateLib from '@primitivefi/contracts/artifacts/RedeemTemplateLib.json'
 import PrimitiveRouter from '../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter.json'
 import PrimitiveRouterTest from '../../build/contracts/test/PrimitiveRouterTest.sol/PrimitiveRouterTest.json'
+import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/PrimitiveCore.json'
+import PrimitiveLiquidity from '../../build/contracts/connectors/PrimitiveLiquidity.sol/PrimitiveLiquidity.json'
+import PrimitiveSwaps from '../../build/contracts/connectors/PrimitiveSwaps.sol/PrimitiveSwaps.json'
+
 
 // Constants and Utility functions
 import constants from './constants'
@@ -268,6 +272,27 @@ export const newTestRouter = async (signer, params) => {
     gasLimit: 9500000,
   })
   return router
+}
+
+export const newPrimitiveCore = async (signer, params) => {
+  const core = await deployContract(signer, PrimitiveCore, params, {
+    gasLimit: 9500000,
+  })
+  return core
+}
+
+export const newPrimitiveLiquidity = async (signer, params) => {
+  const liquid = await deployContract(signer, PrimitiveLiquidity, params, {
+    gasLimit: 9500000,
+  })
+  return liquid
+}
+
+export const newPrimitiveSwaps = async (signer, params) => {
+  const swaps = await deployContract(signer, PrimitiveSwaps, params, {
+    gasLimit: 9500000,
+  })
+  return swaps
 }
 
 /**

@@ -85,7 +85,8 @@ contract PrimitiveRouter is
     IRegistry public registry;
     // TODO interfaces for these
     address public core;
-    address public uni;
+    address public liq;
+    address public swap;
 
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
@@ -119,16 +120,17 @@ contract PrimitiveRouter is
         address weth_,
         address registry_
     ) public {
-        require(address(weth) == address(0x0), "INIT");
+        //require(address(weth) == address(0x0), "INIT");
         weth = IWETH(weth_);
         registry = IRegistry(registry_);
         _route = new Route();
     }
 
-    function init(address _core, address _uni) external {
-      require(core == address(0) && uni == address(0), "ALREADY_INITIALIZED");
+    function init(address _core, address _liq, address _swap) external {
+      require(core == address(0) && liq == address(0) && swap == address(0), "ALREADY_INITIALIZED");
       core = _core;
-      uni = _uni;
+      liq = _liq;
+      swap = _swap;
       emit Initialized(msg.sender);
     }
 
@@ -160,14 +162,14 @@ contract PrimitiveRouter is
         _CALLER = _msgSender();
         _route.executeCall(core, params);
         _CALLER = _NO_CALLER;
-        emit Executed(_msgSender(), address(core), params);
+        emit Executed(_msgSender(), core, params);
     }
 
     function executeCallUni(bytes calldata params) external payable override {
         _CALLER = _msgSender();
-        _route.executeCall(uni, params);
+        _route.executeCall(liq, params);
         _CALLER = _NO_CALLER;
-        emit Executed(_msgSender(), address(uni), params);
+        emit Executed(_msgSender(), liq, params);
     }
 
     // ===== Callback Implementation =====

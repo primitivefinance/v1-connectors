@@ -57,7 +57,6 @@ abstract contract PrimitiveConnector is Registered, Context {
         address primitiveRouter_,
         address registry_
     ) public Registered(registry_) {
-        require(address(weth_) == address(0x0), "Connector: INITIALIZED");
         _weth = IWETH(weth_);
         _primitiveRouter = IPrimitiveRouter(primitiveRouter_);
         checkApproval(weth_, primitiveRouter_);
