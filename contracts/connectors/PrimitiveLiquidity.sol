@@ -181,29 +181,54 @@ contract PrimitiveLiquidity is
         bytes32 r,
         bytes32 s
     ) external returns (uint256, uint256, uint256) {
-        {
-            uint8 v_ = v;
-            bytes32 r_ = r;
-            bytes32 s_ = s;
-            IERC20Permit(IOption(optionAddress).getUnderlyingTokenAddress()).permit(
+      address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+      IERC20Permit(underlying).permit(
                 getCaller(),
                 address(this),
                 uint256(-1),
                 deadline,
-                v_,
-                r_,
-                s_
+                v,
+                r,
+                s
+        );
+        uint256 amountA;
+        uint256 amountB;
+        uint256 liquidity;
+        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
+        IERC20(underlying).transferFrom(msg.sender, optionAddress, quantityOptions);
+        (, uint256 outputRedeems) =
+            IOption(optionAddress).mintOptions(address(this));
+
+        {
+            // scope for adding exact liquidity, avoids stack too deep errors
+            IOption optionToken = IOption(optionAddress);
+            address redeem = optionToken.redeemToken();
+            AddAmounts memory params;
+            params.amountAMax = outputRedeems;
+            params.amountBMax = amountBMax;
+            params.amountAMin = outputRedeems;
+            params.amountBMin = amountBMin;
+            params.deadline = deadline;
+
+            // Approves Uniswap V2 Pair pull tokens from this contract.
+            checkApproval(redeem, address(_router));
+            checkApproval(underlying, address(_router));
+
+            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
+            (amountA, amountB, liquidity) = _addLiquidity(
+                redeem,
+                underlying,
+                params
             );
+            // check for exact liquidity provided
+            assert(amountA == outputRedeems);
+            // Return remaining tokens
+            _transferToCaller(underlying);
+            _transferToCaller(redeem);
         }
-        return
-            addShortLiquidityWithUnderlying(
-              optionAddress,
-              quantityOptions,
-              amountBMax,
-              amountBMin,
-              to,
-              deadline
-            );
+
+        emit AddLiquidity(getCaller(), optionAddress, liquidity);
+        return (amountA, amountB, liquidity);
     }
 
     /**
