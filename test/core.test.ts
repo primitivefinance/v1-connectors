@@ -136,10 +136,16 @@ describe('Core', function () {
       await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
     })
 
-    it('should revert if optionToken.address is not an option ', async () => {
+    it('should revert if optionToken.address is an EOA', async () => {
       params = connector.interface.encodeFunctionData('safeMintWithETH', [Alice])
       // Passing in the address of Alice for the optionToken parameter will revert.
-      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.reverted
+      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith("Route: EXECUTION_FAIL")
+    })
+
+    it('should revert if optionToken.address is not a valid option contract', async () => {
+      params = connector.interface.encodeFunctionData('safeMintWithETH', [connector.address])
+      // Passing in the address of Alice for the optionToken parameter will revert.
+      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith("Route: EXECUTION_FAIL")
     })
 
     it('should emit the mint event', async () => {
