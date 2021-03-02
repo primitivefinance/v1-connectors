@@ -96,13 +96,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
-        // Check to make sure we are minting a WETH call option.
-        require(
-            address(_weth) == optionToken.getUnderlyingTokenAddress(),
-            "PrimitiveCore: NOT_WETH"
-        );
-        bool success = _depositETH();
-        require(success, "PrimitiveCore: ZERO");
+        _depositETH();
         (uint256 long, uint256 short) = _mintOptions(optionToken);
         _transferToCaller(address(optionToken));
         _transferToCaller(optionToken.redeemToken());

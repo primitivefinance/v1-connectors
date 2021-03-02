@@ -142,12 +142,9 @@ abstract contract PrimitiveConnector is Registered, Context {
     {
         address underlying = optionToken.getUnderlyingTokenAddress();
         uint256 quantity = IERC20(underlying).balanceOf(address(this));
-        if (quantity > 0) {
-            IERC20(underlying).safeTransfer(address(optionToken), quantity);
-            return optionToken.mintOptions(address(this));
-        }
-
-        return (0, 0);
+        require(quantity > 0, "ERR_ZERO");
+        IERC20(underlying).safeTransfer(address(optionToken), quantity);
+        return optionToken.mintOptions(address(this));
     }
 
     function _mintOptionsPermitted(IOption optionToken, uint256 quantity)
