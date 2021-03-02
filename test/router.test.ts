@@ -19,7 +19,7 @@ const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = cons
 
 const { ERR_ZERO, ERR_BAL_STRIKE, ERR_NOT_EXPIRED, ERC20_TRANSFER_AMOUNT, FAIL } = constants.ERR_CODES
 
-describe('Core', function () {
+describe('Router', function () {
   let signers: SignerWithAddress[]
   let weth: Contract
   let router: Contract, connector: Contract, liquidity: Contract, swaps: Contract
@@ -95,8 +95,111 @@ describe('Core', function () {
     await redeemToken.connect(signers[1]).approve(router.address, MILLION_ETHER)
   })
 
-  describe('safeMintWithETH', () => {
-    safeMintWithETH = async (inputUnderlyings) => {
+  safeMintWithETH = async (inputUnderlyings) => {
+    let mintparams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
+    // Calculate the strike price of each unit of underlying token
+    let outputRedeems = inputUnderlyings.mul(quote).div(base)
+
+    // The balance of the user we are checking before and after is their ether balance.
+    let underlyingBal = await signer.getBalance()
+    let optionBal = await getTokenBalance(optionToken, Alice)
+    let redeemBal = await getTokenBalance(redeemToken, Alice)
+
+    // Since the user is sending ethers, the change in their balance will need to incorporate gas costs.
+    let gasUsed = await signer.estimateGas(
+      router.executeCall(connector.address, mintparams, {
+        value: inputUnderlyings,
+      })
+    )
+
+    // Call the mint function and check that the event was emitted.
+    await expect(
+      router.connect(signer).executeCall(connector.address, mintparams, {
+        value: inputUnderlyings,
+      })
+    )
+      .to.emit(connector, 'Minted')
+      .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), outputRedeems.toString())
+
+    let underlyingsChange = (await signer.getBalance()).sub(underlyingBal).add(gasUsed)
+    let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
+    let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
+
+    assertWithinError(underlyingsChange, inputUnderlyings.mul(-1))
+    assertWithinError(optionsChange, inputUnderlyings)
+    assertWithinError(redeemsChange, outputRedeems)
+
+    await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
+  }
+
+  safeExerciseForETH = async (inputUnderlyings) => {
+    let exParams = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, inputUnderlyings])
+    // Options:Underlyings are always at a 1:1 ratio.
+    let inputOptions = inputUnderlyings
+    // Calculate the amount of strike tokens necessary to exercise
+    let inputStrikes = inputUnderlyings.mul(quote).div(base)
+
+    // The balance of the user we are checking before and after is their ether balance.
+    let underlyingBal = await signer.getBalance()
+    let optionBal = await getTokenBalance(optionToken, Alice)
+    let strikeBal = await getTokenBalance(quoteToken, Alice)
+
+    await expect(router.connect(signer).executeCall(connector.address, exParams))
+      .to.emit(connector, 'Exercised')
+      .withArgs(Alice, optionToken.address, inputUnderlyings.toString())
+
+    let underlyingsChange = (await signer.getBalance()).sub(underlyingBal)
+    let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
+    let strikesChange = (await getTokenBalance(quoteToken, Alice)).sub(strikeBal)
+
+    assertWithinError(underlyingsChange, inputUnderlyings)
+    assertWithinError(optionsChange, inputOptions.mul(-1))
+    assertWithinError(strikesChange, inputStrikes.mul(-1))
+
+    await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
+  }
+
+  safeCloseForETH = async (inputOptions) => {
+    let closeParams = connector.interface.encodeFunctionData('safeCloseForETH', [optionToken.address, inputOptions])
+    let inputRedeems = inputOptions.mul(quote).div(base)
+
+    // The balance of the user we are checking before and after is their ether balance.
+    let underlyingBal = await signer.getBalance()
+    let optionBal = await getTokenBalance(optionToken, Alice)
+    let redeemBal = await getTokenBalance(redeemToken, Alice)
+
+    await expect(router.connect(signer).executeCall(connector.address, closeParams))
+      .to.emit(connector, 'Closed')
+      .withArgs(Alice, optionToken.address, inputOptions.toString())
+
+    let underlyingsChange = (await signer.getBalance()).sub(underlyingBal)
+    let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
+    let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
+
+    assertWithinError(underlyingsChange, inputOptions)
+    assertWithinError(optionsChange, inputOptions.mul(-1))
+    assertWithinError(redeemsChange, inputRedeems.mul(-1))
+
+    await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
+  }
+
+  describe('full test', () => {
+    beforeEach(async () => {
+      // Deploy a new router & connector instance
+      router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
+      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
+      liquidity = await deploy('PrimitiveLiquidity', { from: signers[0], args: [weth.address, router.address, registry.address] })
+      swaps = await deploy('PrimitiveSwaps', { from: signers[0], args: [weth.address, router.address, registry.address] })
+      await router.init(connector.address, liquidity.address, swaps.address)
+      // Approve the tokens that are being used
+      await baseToken.approve(router.address, MILLION_ETHER)
+      await quoteToken.approve(router.address, MILLION_ETHER)
+      await optionToken.approve(router.address, MILLION_ETHER)
+      await redeemToken.approve(router.address, MILLION_ETHER)
+    })
+
+    it('Router should be unusable when halted', async () => {
+      let inputUnderlyings = parseEther('1')
       let mintparams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
       // Calculate the strike price of each unit of underlying token
       let outputRedeems = inputUnderlyings.mul(quote).div(base)
@@ -106,229 +209,16 @@ describe('Core', function () {
       let optionBal = await getTokenBalance(optionToken, Alice)
       let redeemBal = await getTokenBalance(redeemToken, Alice)
 
-      // Since the user is sending ethers, the change in their balance will need to incorporate gas costs.
-      let gasUsed = await signer.estimateGas(
+      await router.executeCall(connector.address, mintparams, {
+          value: inputUnderlyings,
+      })
+      await router.halt()
+
+      await expect(
         router.executeCall(connector.address, mintparams, {
-          value: inputUnderlyings,
+            value: inputUnderlyings,
         })
-      )
-
-      // Call the mint function and check that the event was emitted.
-      await expect(
-        router.connect(signer).executeCall(connector.address, mintparams, {
-          value: inputUnderlyings,
-        })
-      )
-        .to.emit(connector, 'Minted')
-        .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), outputRedeems.toString())
-
-      let underlyingsChange = (await signer.getBalance()).sub(underlyingBal).add(gasUsed)
-      let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-      let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
-
-      assertWithinError(underlyingsChange, inputUnderlyings.mul(-1))
-      assertWithinError(optionsChange, inputUnderlyings)
-      assertWithinError(redeemsChange, outputRedeems)
-
-      await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
-    }
-
-    it('should revert if amount is 0', async () => {
-      params = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
-      // Without sending any value, the transaction will revert due to the contract's nonZero modifier.
-      await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should revert if optionToken.address is an EOA', async () => {
-      params = connector.interface.encodeFunctionData('safeMintWithETH', [Alice])
-      // Passing in the address of Alice for the optionToken parameter will revert.
-      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith("Route: EXECUTION_FAIL")
-    })
-
-    it('should revert if optionToken.address is not a valid option contract', async () => {
-      params = connector.interface.encodeFunctionData('safeMintWithETH', [connector.address])
-      // Passing in the address of Alice for the optionToken parameter will revert.
-      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith("Route: EXECUTION_FAIL")
-    })
-
-    it('should emit the mint event', async () => {
-      params = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
-      let inputUnderlyings = parseEther('0.1')
-      let outputRedeems = inputUnderlyings.mul(quote).div(base)
-      await expect(
-        router.executeCall(connector.address, params, {
-          value: inputUnderlyings,
-        })
-      )
-        .to.emit(connector, 'Minted')
-        .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), outputRedeems.toString())
-    })
-
-    it('should mint optionTokens and redeemTokens in correct amounts', async () => {
-      // Use the function above to mint options, check emitted events, and check invariants.
-      await safeMintWithETH(parseEther('0.1'))
-    })
-
-    it('should successfully call safe mint a few times in a row', async () => {
-      // Make sure we can mint different values, multiple times in a row.
-      await safeMintWithETH(parseEther('0.1'))
-      await safeMintWithETH(parseEther('0.22'))
-      await safeMintWithETH(parseEther('0.23526231124324'))
-      await safeMintWithETH(parseEther('0.234345'))
-    })
-  })
-
-  describe('safeExerciseForETH', () => {
-    beforeEach(async () => {
-      // Mint some options to the Alice address so the proceeding test can exercise them.
-      await safeMintWithETH(parseEther('5'))
-    })
-
-    safeExerciseForETH = async (inputUnderlyings) => {
-      let exParams = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, inputUnderlyings])
-      // Options:Underlyings are always at a 1:1 ratio.
-      let inputOptions = inputUnderlyings
-      // Calculate the amount of strike tokens necessary to exercise
-      let inputStrikes = inputUnderlyings.mul(quote).div(base)
-
-      // The balance of the user we are checking before and after is their ether balance.
-      let underlyingBal = await signer.getBalance()
-      let optionBal = await getTokenBalance(optionToken, Alice)
-      let strikeBal = await getTokenBalance(quoteToken, Alice)
-
-      await expect(router.connect(signer).executeCall(connector.address, exParams))
-        .to.emit(connector, 'Exercised')
-        .withArgs(Alice, optionToken.address, inputUnderlyings.toString())
-
-      let underlyingsChange = (await signer.getBalance()).sub(underlyingBal)
-      let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-      let strikesChange = (await getTokenBalance(quoteToken, Alice)).sub(strikeBal)
-
-      assertWithinError(underlyingsChange, inputUnderlyings)
-      assertWithinError(optionsChange, inputOptions.mul(-1))
-      assertWithinError(strikesChange, inputStrikes.mul(-1))
-
-      await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
-    }
-
-    it('should revert if amount is 0', async () => {
-      // If we pass in 0 as the exercise quantity, it will revert due to the contract's nonZero modifier.
-      params = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, '0'])
-      await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should revert if user does not have enough optionToken tokens', async () => {
-      params = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, MILLION_ETHER])
-      // Fails early by checking the user's optionToken balance against the quantity of options they wish to exercise.
-      await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should revert if user does not have enough strike tokens', async () => {
-      // Mint some option and redeem tokens to signers[1].address.
-      let mintParams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
-      await router.connect(signers[1]).executeCall(connector.address, mintParams, {
-        value: parseEther('0.1'),
-      })
-      params = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, parseEther('0.1')])
-      // Send the strikeTokens that signers[1].address owns to Alice, so that signers[1].address has 0 strikeTokens.
-      await quoteToken.connect(signers[1]).transfer(Alice, await quoteToken.balanceOf(signers[1].address))
-      // Attempting to exercise an option without having enough strikeTokens will cause a revert.
-      await expect(router.connect(signers[1]).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should exercise consecutively', async () => {
-      await quoteToken.mint(Alice, MILLION_ETHER)
-      await safeExerciseForETH(parseEther('0.1'))
-      await safeExerciseForETH(parseEther('0.32525'))
-      await safeExerciseForETH(parseEther('0.442'))
-    })
-  })
-
-  describe('safeCloseForETH', () => {
-    beforeEach(async () => {
-      // Mint some options to the Alice address so the proceeding test can exercise them.
-      await safeMintWithETH(parseEther('1'))
-    })
-
-    safeCloseForETH = async (inputOptions) => {
-      let closeParams = connector.interface.encodeFunctionData('safeCloseForETH', [optionToken.address, inputOptions])
-      let inputRedeems = inputOptions.mul(quote).div(base)
-
-      // The balance of the user we are checking before and after is their ether balance.
-      let underlyingBal = await signer.getBalance()
-      let optionBal = await getTokenBalance(optionToken, Alice)
-      let redeemBal = await getTokenBalance(redeemToken, Alice)
-
-      await expect(router.connect(signer).executeCall(connector.address, closeParams))
-        .to.emit(connector, 'Closed')
-        .withArgs(Alice, optionToken.address, inputOptions.toString())
-
-      let underlyingsChange = (await signer.getBalance()).sub(underlyingBal)
-      let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-      let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
-
-      assertWithinError(underlyingsChange, inputOptions)
-      assertWithinError(optionsChange, inputOptions.mul(-1))
-      assertWithinError(redeemsChange, inputRedeems.mul(-1))
-
-      await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
-    }
-
-    it('should revert if amount is 0', async () => {
-      params = connector.interface.encodeFunctionData('safeCloseForETH', [optionToken.address, 0])
-      // Fails early if quantity of options to close is 0, because of the contract's nonZero modifier.
-      await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should revert if user does not have enough redeemTokens', async () => {
-      // Mint some option and redeem tokens to signers[1].address.
-      let mintParams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
-      await router.connect(signers[1]).executeCall(connector.address, mintParams, {
-        value: ONE_ETHER,
-      })
-
-      // Send signers[1].address's redeemTokens to Alice, so that signers[1].address has 0 redeemTokens.
-      await redeemToken.connect(signers[1]).transfer(Alice, await redeemToken.balanceOf(signers[1].address))
-
-      params = connector.interface.encodeFunctionData('safeCloseForETH', [optionToken.address, parseEther('0.1')])
-      // Attempting to close options without enough redeemTokens will cause a revert.
-      await expect(router.connect(signers[1]).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should revert if user does not have enough optionToken tokens', async () => {
-      // Mint some option and redeem tokens to signers[1].address.
-      let mintParams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
-      await router.connect(signers[1]).executeCall(connector.address, mintParams, {
-        value: parseEther('0.1'),
-      })
-
-      // Send signers[1].address's optionTokens to Alice, so that signers[1].address has 0 optionTokens.
-      await optionToken.connect(signers[1]).transfer(Alice, await optionToken.balanceOf(signers[1].address))
-
-      params = connector.interface.encodeFunctionData('safeCloseForETH', [optionToken.address, parseEther('0.1')])
-      // Attempting to close a quantity of options that msg.sender does not have will cause a revert.
-      await expect(router.connect(signers[1]).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
-    })
-
-    it('should close consecutively', async () => {
-      await safeMintWithETH(parseEther('1'))
-      await safeCloseForETH(parseEther('0.1'))
-      await safeCloseForETH(parseEther('0.25'))
-      await safeCloseForETH(parseEther('0.5433451'))
-    })
-  })
-
-  describe('full test', () => {
-    beforeEach(async () => {
-      // Deploy a new router & connector instance
-      router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
-      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
-      await router.init(connector.address, AddressZero, AddressZero)
-      // Approve the tokens that are being used
-      await baseToken.approve(router.address, MILLION_ETHER)
-      await quoteToken.approve(router.address, MILLION_ETHER)
-      await optionToken.approve(router.address, MILLION_ETHER)
-      await redeemToken.approve(router.address, MILLION_ETHER)
+      ).to.be.revertedWith("CONTRACT_HALTED")
     })
 
     it('should handle multiple transactions', async () => {
