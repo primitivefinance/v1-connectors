@@ -33,6 +33,8 @@ import {
 import {
     IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
+import {IERC20Permit} from "./IERC20Permit.sol";
+
 
 interface IPrimitiveLiquidity {
     // ==== Liquidity Functions ====

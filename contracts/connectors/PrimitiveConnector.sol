@@ -148,6 +148,19 @@ abstract contract PrimitiveConnector is Registered, Context {
         return (0, 0);
     }
 
+    function _mintOptionsPermitted(IOption optionToken, uint256 quantity)
+        internal
+        returns (uint256, uint256)
+    {
+        address underlying = optionToken.getUnderlyingTokenAddress();
+        if (quantity > 0) {
+            IERC20(underlying).transferFrom(msg.sender, address(optionToken), quantity);
+            return optionToken.mintOptions(address(this));
+        }
+
+        return (0, 0);
+    }
+
     function _closeOptions(IOption optionToken) internal returns (uint256) {
         address redeem = optionToken.redeemToken();
         uint256 quantity = IERC20(redeem).balanceOf(address(this));

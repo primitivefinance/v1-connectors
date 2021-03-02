@@ -83,9 +83,12 @@ contract PrimitiveRouter is
 
     IWETH public weth;
     IRegistry public registry;
-    // TODO interfaces for these
-    address public core;
-    address public uni;
+
+    address public deployer;
+
+    mapping(address => bool) public validConnectors;
+    bool public initialized;
+    bool public halt;
 
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
@@ -111,23 +114,49 @@ contract PrimitiveRouter is
         _EXECUTING = false;
     }
 
+    modifier notHalted() {
+      require(halt == false, "CONTRACT_HALTED");
+      _;
+    }
+
     Route internal _route;
 
     // ===== Constructor =====
 
     constructor(
         address weth_,
-        address registry_,
-        address _core,
-        address _uni
+        address registry_
     ) public {
         require(address(weth) == address(0x0), "INIT");
+        deployer = msg.sender;
         weth = IWETH(weth_);
-        core = _core;
-        _uni = _uni;
         registry = IRegistry(registry_);
         _route = new Route();
         emit Initialized(msg.sender);
+    }
+
+    /**
+     * @notice  Initialize router with its valid connectors.
+     * @notice  Can only be called once, while initialized == false.
+     * @param   core The address of PrimitiveCore.sol
+     * @param   liquidity The address of PrimitiveLiquidity.sol
+     * @param   swaps The address of PrimitiveSwaps.sol
+     */
+    function init(
+      address core,
+      address liquidity,
+      address swaps
+    ) external notHalted {
+      require(initialized == false, "ALREADY_INITIALIZED");
+      initialized = true;
+      validConnectors[core] = true;
+      validConnectors[liquidity] = true;
+      validConnectors[swaps] = true;
+    }
+
+    function halt() external {
+      require(deployer == msg.sender, "NOT_DEPLOYER");
+      halt = true;
     }
 
     // ===== Operations =====
@@ -142,6 +171,7 @@ contract PrimitiveRouter is
         public
         override
         isExec
+        notHalted
         returns (bool)
     {
         IERC20(token).safeTransferFrom(
@@ -154,18 +184,12 @@ contract PrimitiveRouter is
 
     // ===== Execute =====
 
-    function executeCallCore(bytes calldata params) external payable override {
+    function executeCall(address connector, bytes calldata params) external payable override notHalted {
+        require(validConnectors[connector], "INVALID_CONNECTOR");
         _CALLER = _msgSender();
-        _route.executeCall(core, params);
+        _route.executeCall(connector, params);
         _CALLER = _NO_CALLER;
-        emit Executed(_msgSender(), address(core), params);
-    }
-
-    function executeCallUni(bytes calldata params) external payable override {
-        _CALLER = _msgSender();
-        _route.executeCall(uni, params);
-        _CALLER = _NO_CALLER;
-        emit Executed(_msgSender(), address(uni), params);
+        emit Executed(_msgSender(), connector, params);
     }
 
     // ===== Callback Implementation =====
@@ -182,7 +206,7 @@ contract PrimitiveRouter is
         uint256 amount0,
         uint256 amount1,
         bytes calldata data
-    ) external override {
+    ) external override notHalted {
         assert(
             msg.sender ==
                 factory.getPair(
@@ -200,7 +224,7 @@ contract PrimitiveRouter is
 
     // ===== Fallback =====
 
-    receive() external payable {
+    receive() external payable notHalted {
         assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
     }
 
