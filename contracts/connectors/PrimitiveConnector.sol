@@ -151,17 +151,13 @@ abstract contract PrimitiveConnector is Registered, Context {
         internal
         returns (uint256, uint256)
     {
-        address underlying = optionToken.getUnderlyingTokenAddress();
-        if (quantity > 0) {
-            IERC20(underlying).transferFrom(
-                msg.sender,
+        require(quantity > 0, "ERR_ZERO");
+        IERC20(optionToken.getUnderlyingTokenAddress()).transferFrom(
+                getCaller(),
                 address(optionToken),
                 quantity
-            );
-            return optionToken.mintOptions(address(this));
-        }
-
-        return (0, 0);
+        );
+        return optionToken.mintOptions(address(this));
     }
 
     function _closeOptions(IOption optionToken) internal returns (uint256) {

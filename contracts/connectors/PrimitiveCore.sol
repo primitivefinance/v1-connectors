@@ -90,7 +90,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      * @param   optionToken The address of the option token to mint.
      */
     function safeMintWithETH(IOption optionToken)
-        public
+        external
         payable
         override
         onlyRegistered(optionToken)
@@ -117,7 +117,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external returns (uint256, uint256) {
+    ) external onlyRegistered(optionToken) returns (uint256, uint256) {
         // Permit minting using the caller's underlying tokens
         IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
             getCaller(),
@@ -146,6 +146,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         public
         payable
         override
+        onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
         require(msg.value > 0, "PrimitiveCore: ZERO");
@@ -178,6 +179,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeExerciseForETH(IOption optionToken, uint256 exerciseQuantity)
         public
         override
+        onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
         address underlying = optionToken.getUnderlyingTokenAddress();
@@ -223,6 +225,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeRedeemForETH(IOption optionToken, uint256 redeemQuantity)
         public
         override
+        onlyRegistered(optionToken)
         returns (uint256)
     {
         address strike = optionToken.getStrikeTokenAddress();
@@ -254,6 +257,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeCloseForETH(IOption optionToken, uint256 closeQuantity)
         public
         override
+        onlyRegistered(optionToken)
         returns (
             uint256,
             uint256,
