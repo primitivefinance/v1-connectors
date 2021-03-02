@@ -126,6 +126,13 @@ contract PrimitiveRouter is
         emit Initialized(msg.sender);
     }
 
+    /**
+     * @notice  Initialize router with its valid connectors.
+     * @notice  Can only be called once, while initialized == false.
+     * @param   core The address of PrimitiveCore.sol
+     * @param   liquidity The address of PrimitiveLiquidity.sol
+     * @param   swaps The address of PrimitiveSwaps.sol
+     */
     function init(
       address core,
       address liquidity,
