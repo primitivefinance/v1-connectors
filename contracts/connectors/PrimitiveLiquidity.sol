@@ -119,13 +119,13 @@ contract PrimitiveLiquidity is
     )
         public
         override
-        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
             uint256
         )
     {
+        require(isRegistered(IOption(optionAddress)), "PrimitiveSwaps: EVIL_OPTION");
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;
