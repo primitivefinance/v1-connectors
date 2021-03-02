@@ -33,9 +33,9 @@ import {
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 
 interface IPrimitiveRouter {
-    function executeCallCore(bytes calldata params) external payable;
-
-    function executeCallUni(bytes calldata params) external payable;
+    function executeCall(address connector, bytes calldata params)
+        external
+        payable;
 
     function transferFromCaller(address token, uint256 amount)
         external

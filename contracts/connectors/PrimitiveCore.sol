@@ -36,7 +36,11 @@ import {
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Primitive
 import {CoreLib} from "../libraries/CoreLib.sol";
-import {IPrimitiveCore, IOption, IERC20Permit} from "../interfaces/IPrimitiveCore.sol";
+import {
+    IPrimitiveCore,
+    IOption,
+    IERC20Permit
+} from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 
 import "hardhat/console.sol";
@@ -96,9 +100,12 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
             address(_weth) == optionToken.getUnderlyingTokenAddress(),
             "PrimitiveCore: NOT_WETH"
         );
-        _depositETH();
+        bool success = _depositETH();
+        require(success, "PrimitiveCore: ZERO");
         (uint256 long, uint256 short) = _mintOptions(optionToken);
-        emit Minted(_msgSender(), address(optionToken), long, short);
+        _transferToCaller(address(optionToken));
+        _transferToCaller(optionToken.redeemToken());
+        emit Minted(getCaller(), address(optionToken), long, short);
         return (long, short);
     }
 
@@ -108,25 +115,29 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      * @param   optionToken The address of the option token to mint.
      * @param   amount The quantity of options to mint.
      */
-     function safeMintWithPermit
-         (IOption optionToken, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
-         external
-         returns (uint256, uint256)
-     {
-         // Permit minting using the caller's underlying tokens
-         IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
-             getCaller(),
-             address(this),
-             uint256(-1),
-             deadline,
-             v,
-             r,
-             s
-         );
-         (uint256 long, uint256 short) = _mintOptionsPermitted(optionToken, amount);
-         emit Minted(_msgSender(), address(optionToken), long, short);
-         return (long, short);
-     }
+    function safeMintWithPermit(
+        IOption optionToken,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256, uint256) {
+        // Permit minting using the caller's underlying tokens
+        IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
+            getCaller(),
+            address(this),
+            uint256(-1),
+            deadline,
+            v,
+            r,
+            s
+        );
+        (uint256 long, uint256 short) =
+            _mintOptionsPermitted(optionToken, amount);
+        emit Minted(getCaller(), address(optionToken), long, short);
+        return (long, short);
+    }
 
     /**
      * @dev     Swaps msg.value of strikeTokens (ethers) to underlyingTokens.
@@ -182,7 +193,9 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         uint256 strikeQuantity =
             CoreLib.getProportionalShortOptions(optionToken, exerciseQuantity);
         // Pull tokens to this contract
-        _transferFromCaller(address(optionToken), exerciseQuantity);
+        bool success =
+            _transferFromCaller(address(optionToken), exerciseQuantity);
+        require(success, "PrimitiveCore: ZERO");
         _transferFromCaller(strike, strikeQuantity);
 
         // Push tokens to option contract
@@ -201,6 +214,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
 
         // Converts the withdrawn WETH to ethers, then sends the ethers to the getCaller() address.
         _withdrawETH();
+        emit Exercised(getCaller(), address(optionToken), exerciseQuantity);
         return (strikesPaid, options);
     }
 
@@ -220,11 +234,14 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         // Require the strike token to be Weth.
         require(strike == address(_weth), "PrimitiveCore: NOT_WETH");
         address redeem = optionToken.redeemToken();
+        console.log("pulling");
         // Pull redeems
         _transferFromCaller(redeem, redeemQuantity);
         // Push redeems to option contract
         IERC20(redeem).safeTransfer(address(optionToken), redeemQuantity);
+        console.log("calling redeem", redeemQuantity);
         uint256 short = optionToken.redeemStrikeTokens(address(this));
+        console.log("withdrawing");
         _withdrawETH();
         emit Redeemed(getCaller(), address(optionToken), redeemQuantity);
         return short;

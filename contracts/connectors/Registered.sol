@@ -41,7 +41,7 @@ contract Registered {
     // ===== Constructor =====
 
     constructor(address registry_) public {
-        require(address(registry_) == address(0x0), "Registered: INITIALIZED");
+        require(address(_registry) == address(0x0), "Registered: INITIALIZED");
         _registry = IRegistry(registry_);
     }
 

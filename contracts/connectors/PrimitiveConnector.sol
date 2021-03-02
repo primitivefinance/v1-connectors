@@ -57,7 +57,7 @@ abstract contract PrimitiveConnector is Registered, Context {
         address primitiveRouter_,
         address registry_
     ) public Registered(registry_) {
-        require(address(weth_) == address(0x0), "Connector: INITIALIZED");
+        require(address(_weth) == address(0x0), "Connector: INITIALIZED");
         _weth = IWETH(weth_);
         _primitiveRouter = IPrimitiveRouter(primitiveRouter_);
         checkApproval(weth_, primitiveRouter_);
@@ -118,8 +118,9 @@ abstract contract PrimitiveConnector is Registered, Context {
     {
         if (quantity > 0) {
             _primitiveRouter.transferFromCaller(token, quantity);
+            return true;
         }
-        return true;
+        return false;
     }
 
     /**
@@ -130,8 +131,9 @@ abstract contract PrimitiveConnector is Registered, Context {
         uint256 quantity = IERC20(token).balanceOf(address(this));
         if (quantity > 0) {
             IERC20(token).safeTransfer(getCaller(), quantity);
+            return true;
         }
-        return true;
+        return false;
     }
 
     function _mintOptions(IOption optionToken)
@@ -154,7 +156,11 @@ abstract contract PrimitiveConnector is Registered, Context {
     {
         address underlying = optionToken.getUnderlyingTokenAddress();
         if (quantity > 0) {
-            IERC20(underlying).transferFrom(msg.sender, address(optionToken), quantity);
+            IERC20(underlying).transferFrom(
+                msg.sender,
+                address(optionToken),
+                quantity
+            );
             return optionToken.mintOptions(address(this));
         }
 
