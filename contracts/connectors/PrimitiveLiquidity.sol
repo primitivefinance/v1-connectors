@@ -43,6 +43,8 @@ import {
     IUniswapV2Pair,
     IOption
 } from "../interfaces/IPrimitiveLiquidity.sol";
+import {IERC20Permit} from "../interfaces/IERC20Permit.sol";
+
 // Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 import {CoreLib} from "../libraries/CoreLib.sol";
@@ -166,6 +168,42 @@ contract PrimitiveLiquidity is
 
         emit AddLiquidity(getCaller(), optionAddress, liquidity);
         return (amountA, amountB, liquidity);
+    }
+
+    function addShortLiquidityWithUnderlyingWithPermit(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256, uint256, uint256) {
+        {
+            uint8 v_ = v;
+            bytes32 r_ = r;
+            bytes32 s_ = s;
+            IERC20Permit(IOption(optionAddress).getUnderlyingTokenAddress()).permit(
+                getCaller(),
+                address(this),
+                uint256(-1),
+                deadline,
+                v_,
+                r_,
+                s_
+            );
+        }
+        return
+            addShortLiquidityWithUnderlying(
+              optionAddress,
+              quantityOptions,
+              amountBMax,
+              amountBMin,
+              to,
+              deadline
+            );
     }
 
     /**
