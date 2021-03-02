@@ -110,7 +110,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      * @param   optionToken The address of the option token to mint.
      */
      function safeMintWithPermit
-         (IOption optionToken, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+         (IOption optionToken, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
          external
          returns (uint256, uint256)
      {
@@ -124,7 +124,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
              r,
              s
          );
-         (uint256 long, uint256 short) = _mintOptions(optionToken);
+         (uint256 long, uint256 short) = _mintOptionsPermitted(optionToken, amount);
          emit Minted(_msgSender(), address(optionToken), long, short);
          return (long, short);
      }
