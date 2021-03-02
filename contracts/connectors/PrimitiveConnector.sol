@@ -118,8 +118,9 @@ abstract contract PrimitiveConnector is Registered, Context {
     {
         if (quantity > 0) {
             _primitiveRouter.transferFromCaller(token, quantity);
+            return true;
         }
-        return true;
+        return false;
     }
 
     /**
@@ -130,8 +131,9 @@ abstract contract PrimitiveConnector is Registered, Context {
         uint256 quantity = IERC20(token).balanceOf(address(this));
         if (quantity > 0) {
             IERC20(token).safeTransfer(getCaller(), quantity);
+            return true;
         }
-        return true;
+        return false;
     }
 
     function _mintOptions(IOption optionToken)

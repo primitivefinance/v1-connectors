@@ -99,7 +99,7 @@ contract PrimitiveRouter is
      */
     bool private _EXECUTING;
     /**
-     * @dev If _EXECUTING, the orginal `msg.sender` of the execute call.
+     * @dev If _EXECUTING, the orginal `_msgSender()` of the execute call.
      */
     address internal _CALLER = _NO_CALLER;
 
@@ -125,11 +125,11 @@ contract PrimitiveRouter is
 
     constructor(address weth_, address registry_) public {
         require(address(weth) == address(0x0), "INIT");
-        deployer = msg.sender;
+        deployer = _msgSender();
         weth = IWETH(weth_);
         registry = IRegistry(registry_);
         _route = new Route();
-        emit Initialized(msg.sender);
+        emit Initialized(_msgSender());
     }
 
     /**
@@ -198,7 +198,7 @@ contract PrimitiveRouter is
 
     /**
      * @dev     The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
-     * @param   sender The original msg.sender of the UniswapV2Pair.swap() call.
+     * @param   sender The original _msgSender() of the UniswapV2Pair.swap() call.
      * @param   amount0 The quantity of token0 received to the `to` address in the swap() call.
      * @param   amount1 The quantity of token1 received to the `to` address in the swap() call.
      * @param   data The payload passed in the `data` parameter of the swap() call.
@@ -210,12 +210,12 @@ contract PrimitiveRouter is
         bytes calldata data
     ) external override notHalted {
         assert(
-            msg.sender ==
+            _msgSender() ==
                 factory.getPair(
-                    IUniswapV2Pair(msg.sender).token0(),
-                    IUniswapV2Pair(msg.sender).token1()
+                    IUniswapV2Pair(_msgSender()).token0(),
+                    IUniswapV2Pair(_msgSender()).token1()
                 )
-        ); /// ensure that msg.sender is actually a V2 pair
+        ); /// ensure that _msgSender() is actually a V2 pair
         (bool success, bytes memory returnData) = address(this).call(data);
         require(
             success &&
@@ -227,7 +227,7 @@ contract PrimitiveRouter is
     // ===== Fallback =====
 
     receive() external payable notHalted {
-        assert(msg.sender == address(weth)); // only accept ETH via fallback from the WETH contract
+        assert(_msgSender() == address(weth)); // only accept ETH via fallback from the WETH contract
     }
 
     // ===== Execution Context =====

@@ -103,6 +103,8 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         bool success = _depositETH();
         require(success, "PrimitiveCore: ZERO");
         (uint256 long, uint256 short) = _mintOptions(optionToken);
+        _transferToCaller(address(optionToken));
+        _transferToCaller(optionToken.redeemToken());
         emit Minted(getCaller(), address(optionToken), long, short);
         return (long, short);
     }
@@ -191,7 +193,9 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         uint256 strikeQuantity =
             CoreLib.getProportionalShortOptions(optionToken, exerciseQuantity);
         // Pull tokens to this contract
-        _transferFromCaller(address(optionToken), exerciseQuantity);
+        bool success =
+            _transferFromCaller(address(optionToken), exerciseQuantity);
+        require(success, "PrimitiveCore: ZERO");
         _transferFromCaller(strike, strikeQuantity);
 
         // Push tokens to option contract
@@ -230,11 +234,14 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         // Require the strike token to be Weth.
         require(strike == address(_weth), "PrimitiveCore: NOT_WETH");
         address redeem = optionToken.redeemToken();
+        console.log("pulling");
         // Pull redeems
         _transferFromCaller(redeem, redeemQuantity);
         // Push redeems to option contract
         IERC20(redeem).safeTransfer(address(optionToken), redeemQuantity);
+        console.log("calling redeem", redeemQuantity);
         uint256 short = optionToken.redeemStrikeTokens(address(this));
+        console.log("withdrawing");
         _withdrawETH();
         emit Redeemed(getCaller(), address(optionToken), redeemQuantity);
         return short;
