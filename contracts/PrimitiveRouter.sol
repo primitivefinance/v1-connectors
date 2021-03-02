@@ -132,6 +132,7 @@ contract PrimitiveRouter is
       address swaps
     ) external {
       require(initialized == false, "ALREADY_INITIALIZED");
+      initialized = true;
       validConnectors[core] = true;
       validConnectors[liquidity] = true;
       validConnectors[swaps] = true;
