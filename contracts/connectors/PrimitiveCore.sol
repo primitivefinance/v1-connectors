@@ -36,7 +36,11 @@ import {
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Primitive
 import {CoreLib} from "../libraries/CoreLib.sol";
-import {IPrimitiveCore, IOption, IERC20Permit} from "../interfaces/IPrimitiveCore.sol";
+import {
+    IPrimitiveCore,
+    IOption,
+    IERC20Permit
+} from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 
 import "hardhat/console.sol";
@@ -96,9 +100,10 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
             address(_weth) == optionToken.getUnderlyingTokenAddress(),
             "PrimitiveCore: NOT_WETH"
         );
-        _depositETH();
+        bool success = _depositETH();
+        require(success, "PrimitiveCore: ZERO");
         (uint256 long, uint256 short) = _mintOptions(optionToken);
-        emit Minted(_msgSender(), address(optionToken), long, short);
+        emit Minted(getCaller(), address(optionToken), long, short);
         return (long, short);
     }
 
@@ -108,25 +113,29 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
      * @param   optionToken The address of the option token to mint.
      * @param   amount The quantity of options to mint.
      */
-     function safeMintWithPermit
-         (IOption optionToken, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
-         external
-         returns (uint256, uint256)
-     {
-         // Permit minting using the caller's underlying tokens
-         IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
-             getCaller(),
-             address(this),
-             uint256(-1),
-             deadline,
-             v,
-             r,
-             s
-         );
-         (uint256 long, uint256 short) = _mintOptionsPermitted(optionToken, amount);
-         emit Minted(_msgSender(), address(optionToken), long, short);
-         return (long, short);
-     }
+    function safeMintWithPermit(
+        IOption optionToken,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256, uint256) {
+        // Permit minting using the caller's underlying tokens
+        IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
+            getCaller(),
+            address(this),
+            uint256(-1),
+            deadline,
+            v,
+            r,
+            s
+        );
+        (uint256 long, uint256 short) =
+            _mintOptionsPermitted(optionToken, amount);
+        emit Minted(getCaller(), address(optionToken), long, short);
+        return (long, short);
+    }
 
     /**
      * @dev     Swaps msg.value of strikeTokens (ethers) to underlyingTokens.
@@ -201,6 +210,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
 
         // Converts the withdrawn WETH to ethers, then sends the ethers to the getCaller() address.
         _withdrawETH();
+        emit Exercised(getCaller(), address(optionToken), exerciseQuantity);
         return (strikesPaid, options);
     }
 

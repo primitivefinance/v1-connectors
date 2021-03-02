@@ -19,7 +19,7 @@ contract PrimitiveRouterTest is PrimitiveRouter {
         address router_,
         address factory_,
         address registry_
-    ) public PrimitiveRouter(weth_, registry_, address(0), address(0)) {
+    ) public PrimitiveRouter(weth_, registry_) {
         factory = IUniswapV2Factory(factory_);
         router = IUniswapV2Router02(router_);
     }

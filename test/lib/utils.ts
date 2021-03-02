@@ -1,4 +1,5 @@
 import { assert, expect } from 'chai'
+import { Contract } from 'ethers'
 import { ethers } from 'hardhat'
 const { parseEther } = ethers.utils
 const { AddressZero } = ethers.constants
@@ -111,4 +112,8 @@ export const getTokenBalances = async (Primitive, address) => {
 export const sortTokens = (tokenA, tokenB) => {
   let tokens = tokenA < tokenB ? [tokenA, tokenB] : [tokenB, tokenA]
   return tokens
+}
+
+export const getParams = (instance: Contract, method: string, args: any[]): any => {
+  return instance.interface.encodeFunctionData(method, args)
 }

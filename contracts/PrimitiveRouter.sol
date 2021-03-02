@@ -88,7 +88,7 @@ contract PrimitiveRouter is
 
     mapping(address => bool) public validConnectors;
     bool public initialized;
-    bool public halt;
+    bool public _halt;
 
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
@@ -115,18 +115,15 @@ contract PrimitiveRouter is
     }
 
     modifier notHalted() {
-      require(halt == false, "CONTRACT_HALTED");
-      _;
+        require(_halt == false, "CONTRACT_HALTED");
+        _;
     }
 
     Route internal _route;
 
     // ===== Constructor =====
 
-    constructor(
-        address weth_,
-        address registry_
-    ) public {
+    constructor(address weth_, address registry_) public {
         require(address(weth) == address(0x0), "INIT");
         deployer = msg.sender;
         weth = IWETH(weth_);
@@ -143,20 +140,20 @@ contract PrimitiveRouter is
      * @param   swaps The address of PrimitiveSwaps.sol
      */
     function init(
-      address core,
-      address liquidity,
-      address swaps
+        address core,
+        address liquidity,
+        address swaps
     ) external notHalted {
-      require(initialized == false, "ALREADY_INITIALIZED");
-      initialized = true;
-      validConnectors[core] = true;
-      validConnectors[liquidity] = true;
-      validConnectors[swaps] = true;
+        require(initialized == false, "ALREADY_INITIALIZED");
+        initialized = true;
+        validConnectors[core] = true;
+        validConnectors[liquidity] = true;
+        validConnectors[swaps] = true;
     }
 
     function halt() external {
-      require(deployer == msg.sender, "NOT_DEPLOYER");
-      halt = true;
+        require(deployer == _msgSender(), "NOT_DEPLOYER");
+        _halt = true;
     }
 
     // ===== Operations =====
@@ -184,10 +181,15 @@ contract PrimitiveRouter is
 
     // ===== Execute =====
 
-    function executeCall(address connector, bytes calldata params) external payable override notHalted {
+    function executeCall(address connector, bytes calldata params)
+        external
+        payable
+        override
+        notHalted
+    {
         require(validConnectors[connector], "INVALID_CONNECTOR");
         _CALLER = _msgSender();
-        _route.executeCall(connector, params);
+        _route.executeCall.value(msg.value)(connector, params);
         _CALLER = _NO_CALLER;
         emit Executed(_msgSender(), connector, params);
     }

@@ -181,7 +181,7 @@ contract PrimitiveLiquidity is
      * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
-    function addShortLiquidityWithUnderlyingWithPermit(
+    /* function addShortLiquidityWithUnderlyingWithPermit(
         address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,
@@ -191,9 +191,21 @@ contract PrimitiveLiquidity is
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external returns (uint256, uint256, uint256) {
-      address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-      IERC20Permit(underlying).permit(
+    )
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        uint256 amountA;
+        uint256 amountB;
+        uint256 liquidity;
+        {
+            IOption optionToken = IOption(optionAddress);
+            address underlying = optionToken.getUnderlyingTokenAddress();
+            IERC20Permit(underlying).permit(
                 getCaller(),
                 address(this),
                 uint256(-1),
@@ -201,19 +213,23 @@ contract PrimitiveLiquidity is
                 v,
                 r,
                 s
-        );
-        uint256 amountA;
-        uint256 amountB;
-        uint256 liquidity;
-        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-        IERC20(underlying).transferFrom(msg.sender, optionAddress, quantityOptions);
-        (, uint256 outputRedeems) =
-            IOption(optionAddress).mintOptions(address(this));
+            );
+
+            uint256 amt = quantityOptions;
+            // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
+            IERC20(underlying).transferFrom(
+                msg.sender,
+                address(optionToken),
+                amt
+            );
+        }
 
         {
             // scope for adding exact liquidity, avoids stack too deep errors
             IOption optionToken = IOption(optionAddress);
+            (, uint256 outputRedeems) = optionToken.mintOptions(address(this));
             address redeem = optionToken.redeemToken();
+            address underlying = optionToken.getUnderlyingTokenAddress();
             AddAmounts memory params;
             params.amountAMax = outputRedeems;
             params.amountBMax = amountBMax;
@@ -240,7 +256,7 @@ contract PrimitiveLiquidity is
 
         emit AddLiquidity(getCaller(), optionAddress, liquidity);
         return (amountA, amountB, liquidity);
-    }
+    } */
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
