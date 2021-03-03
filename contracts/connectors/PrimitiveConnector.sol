@@ -51,10 +51,7 @@ abstract contract PrimitiveConnector is Context {
 
     // ===== Constructor =====
 
-    constructor(
-        address weth_,
-        address primitiveRouter_
-    ) public {
+    constructor(address weth_, address primitiveRouter_) public {
         _weth = IWETH(weth_);
         _primitiveRouter = IPrimitiveRouter(primitiveRouter_);
         checkApproval(weth_, primitiveRouter_);
@@ -64,7 +61,10 @@ abstract contract PrimitiveConnector is Context {
      * @notice Reverts if the `option` is not deployed from the Primitive Registry.
      */
     modifier onlyRegistered(IOption option) {
-        require(_primitiveRouter.validOptions(address(option)), "PrimitiveSwaps: EVIL_OPTION");
+        require(
+            _primitiveRouter.validOptions(address(option)),
+            "PrimitiveSwaps: EVIL_OPTION"
+        );
         _;
     }
 
@@ -141,6 +141,26 @@ abstract contract PrimitiveConnector is Context {
         return false;
     }
 
+    /**
+     * @notice  Calls the Router to pull `token` from the getCaller() and send them to this contract.
+     * @dev     This eliminates the need for users to approve the Router and each connector.
+     */
+    function _transferFromCallerToReceiver(
+        address token,
+        uint256 quantity,
+        address receiver
+    ) internal returns (bool) {
+        if (quantity > 0) {
+            _primitiveRouter.transferFromCallerToReceiver(
+                token,
+                quantity,
+                receiver
+            );
+            return true;
+        }
+        return false;
+    }
+
     function _mintOptions(IOption optionToken)
         internal
         returns (uint256, uint256)
@@ -158,9 +178,9 @@ abstract contract PrimitiveConnector is Context {
     {
         require(quantity > 0, "ERR_ZERO");
         IERC20(optionToken.getUnderlyingTokenAddress()).transferFrom(
-                getCaller(),
-                address(optionToken),
-                quantity
+            getCaller(),
+            address(optionToken),
+            quantity
         );
         return optionToken.mintOptions(address(this));
     }

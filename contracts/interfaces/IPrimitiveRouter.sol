@@ -41,6 +41,12 @@ interface IPrimitiveRouter {
         external
         returns (bool);
 
+    function transferFromCallerToReceiver(
+        address token,
+        uint256 amount,
+        address receiver
+    ) external returns (bool);
+
     // ==== View ====
 
     function getCaller() external view returns (address);
