@@ -12,14 +12,13 @@ const { AddressZero } = ethers.constants
 import * as utils from './lib/utils'
 import * as setup from './lib/setup'
 import constants from './lib/constants'
-import { connect } from 'http2'
 const { assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 
 const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = constants.VALUES
 
 const { ERR_ZERO, ERR_BAL_STRIKE, ERR_NOT_EXPIRED, ERC20_TRANSFER_AMOUNT, FAIL } = constants.ERR_CODES
 
-describe('Core', function () {
+describe('PrimitiveCore', function () {
   let signers: SignerWithAddress[]
   let weth: Contract
   let router: Contract, connector: Contract
@@ -140,13 +139,13 @@ describe('Core', function () {
     it('should revert if optionToken.address is an EOA', async () => {
       params = connector.interface.encodeFunctionData('safeMintWithETH', [Alice])
       // Passing in the address of Alice for the optionToken parameter will revert.
-      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith("Route: EXECUTION_FAIL")
+      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith('Route: EXECUTION_FAIL')
     })
 
     it('should revert if optionToken.address is not a valid option contract', async () => {
       params = connector.interface.encodeFunctionData('safeMintWithETH', [connector.address])
       // Passing in the address of Alice for the optionToken parameter will revert.
-      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith("Route: EXECUTION_FAIL")
+      await expect(router.executeCall(connector.address, params, { value: 10 })).to.be.revertedWith('Route: EXECUTION_FAIL')
     })
 
     it('should emit the mint event', async () => {

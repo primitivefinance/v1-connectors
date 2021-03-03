@@ -79,19 +79,24 @@ contract PrimitiveLiquidity is
     event RemoveLiquidity(
         address indexed from,
         address indexed option,
-        uint256 liquidity
+        uint256 underlyingWithdrawn
     );
 
-    IUniswapV2Factory internal _factory =
-        IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 _factory contract to get pair addresses from
-    IUniswapV2Router02 internal _router =
+    IUniswapV2Factory public factory =
+        IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 factory contract to get pair addresses from
+    IUniswapV2Router02 public router =
         IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // The Uniswap contract used to interact with the protocol
 
     // ===== Constructor =====
     constructor(
         address weth_,
-        address primitiveRouter_
-    ) public PrimitiveConnector(weth_, primitiveRouter_) {
+        address primitiveRouter_,
+        address registry_,
+        address factory_,
+        address router_
+    ) public PrimitiveConnector(weth_, primitiveRouter_, registry_) {
+        factory = IUniswapV2Factory(factory_);
+        router = IUniswapV2Router02(router_);
         emit Initialized(_msgSender());
     }
 
@@ -124,7 +129,14 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
+<<<<<<< HEAD
         require(_primitiveRouter.validOptions(optionAddress), "PrimitiveSwaps: EVIL_OPTION");
+=======
+        require(
+            isRegistered(IOption(optionAddress)),
+            "PrimitiveSwaps: EVIL_OPTION"
+        );
+>>>>>>> 251f3ea... feat(liq-tests): Adds liquidity tests. Needs more work.
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;
@@ -149,8 +161,8 @@ contract PrimitiveLiquidity is
             params.deadline = deadline;
 
             // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(_router));
-            checkApproval(underlying, address(_router));
+            checkApproval(redeem, address(router));
+            checkApproval(underlying, address(router));
 
             // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
             (amountA, amountB, liquidity) = _addLiquidity(
@@ -165,7 +177,6 @@ contract PrimitiveLiquidity is
             _transferToCaller(redeem);
             _transferToCaller(address(optionToken));
         }
-
         emit AddLiquidity(getCaller(), optionAddress, liquidity);
         return (amountA, amountB, liquidity);
     }
@@ -238,8 +249,8 @@ contract PrimitiveLiquidity is
             params.deadline = deadline;
 
             // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(_router));
-            checkApproval(underlying, address(_router));
+            checkApproval(redeem, address(router));
+            checkApproval(underlying, address(router));
 
             // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
             (amountA, amountB, liquidity) = _addLiquidity(
@@ -317,8 +328,8 @@ contract PrimitiveLiquidity is
             params.deadline = deadline;
 
             // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(_router));
-            checkApproval(underlying, address(_router));
+            checkApproval(redeem, address(router));
+            checkApproval(underlying, address(router));
 
             // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
             (amountA, amountB, liquidity) = _addLiquidity(
@@ -359,7 +370,7 @@ contract PrimitiveLiquidity is
         )
     {
         return
-            _router.addLiquidity(
+            router.addLiquidity(
                 tokenA,
                 tokenB,
                 params.amountAMax,
@@ -391,7 +402,13 @@ contract PrimitiveLiquidity is
         uint256 amountBMin,
         address to,
         uint256 deadline
-    ) public override nonReentrant onlyRegistered(IOption(optionAddress)) returns (uint256) {
+    )
+        public
+        override
+        nonReentrant
+        onlyRegistered(IOption(optionAddress))
+        returns (uint256)
+    {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
@@ -402,7 +419,7 @@ contract PrimitiveLiquidity is
         params.deadline = deadline;
 
         _transferFromCaller(address(pair), liquidity);
-        checkApproval(address(pair), address(_router));
+        checkApproval(address(pair), address(router));
 
         (uint256 shortTokensWithdrawn, uint256 underlyingTokensWithdrawn) =
             _removeLiquidity(redeem, underlying, params);
@@ -423,6 +440,11 @@ contract PrimitiveLiquidity is
         } else {
             _transferToCaller(underlying);
         }
+        emit RemoveLiquidity(
+            getCaller(),
+            address(optionToken),
+            proceeds.add(underlyingTokensWithdrawn)
+        );
         return (underlyingTokensWithdrawn.add(proceeds));
     }
 
@@ -439,7 +461,7 @@ contract PrimitiveLiquidity is
         RemoveAmounts memory params
     ) internal returns (uint256, uint256) {
         return
-            _router.removeLiquidity(
+            router.removeLiquidity(
                 tokenA,
                 tokenB,
                 params.liquidity,
@@ -460,7 +482,12 @@ contract PrimitiveLiquidity is
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external override onlyRegistered(IOption(optionAddress)) returns (uint256) {
+    )
+        external
+        override
+        onlyRegistered(IOption(optionAddress))
+        returns (uint256)
+    {
         IOption optionToken = IOption(optionAddress);
         uint256 liquidity_ = liquidity;
         uint256 deadline_ = deadline;
@@ -514,15 +541,15 @@ contract PrimitiveLiquidity is
         address redeemToken = option.redeemToken();
         address underlyingToken = option.getUnderlyingTokenAddress();
         IUniswapV2Pair pair =
-            IUniswapV2Pair(_factory.getPair(redeemToken, underlyingToken));
+            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
         return (pair, underlyingToken, redeemToken);
     }
 
     function getRouter() public view override returns (IUniswapV2Router02) {
-        return _router;
+        return router;
     }
 
     function getFactory() public view override returns (IUniswapV2Factory) {
-        return _factory;
+        return factory;
     }
 }

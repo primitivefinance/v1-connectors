@@ -51,6 +51,7 @@ library SwapsLib {
         uint256 flashLoanQuantity
     )
         internal
+        view
         returns (
             uint256,
             uint256,
@@ -65,7 +66,9 @@ library SwapsLib {
         // In most cases there will be an underlying payout, which is subtracted from the flashLoanQuantity.
         uint256 cost;
         if (payout > 0) {
-            cost = flashLoanQuantity.sub(payout);
+            cost = CoreLib
+                .getProportionalLongOptions(optionToken, flashLoanQuantity)
+                .sub(payout);
         }
         return (payout, cost, outstanding);
     }
@@ -77,7 +80,7 @@ library SwapsLib {
         IUniswapV2Router02 router,
         IOption optionToken,
         uint256 flashLoanQuantity
-    ) internal returns (uint256, uint256) {
+    ) internal view returns (uint256, uint256) {
         (uint256 premium, uint256 extraRedeems) =
             getOpenPremium(router, optionToken, flashLoanQuantity);
 
