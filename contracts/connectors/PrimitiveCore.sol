@@ -150,11 +150,6 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         returns (uint256, uint256)
     {
         require(msg.value > 0, "PrimitiveCore: ZERO");
-        // Require one of the option's assets to be WETH.
-        require(
-            optionToken.getStrikeTokenAddress() == address(_weth),
-            "PrimitiveCore: NOT_WETH"
-        );
 
         _depositETH();
         uint256 long =
