@@ -96,10 +96,11 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         returns (uint256, uint256)
     {
         require(msg.value > 0, "ERR_ZERO");
+        address caller = getCaller();
         _weth.deposit.value(msg.value)();
         IERC20(address(_weth)).safeTransfer(address(optionToken), msg.value);
-        (uint256 long, uint256 short) = optionToken.mintOptions(getCaller());
-        emit Minted(getCaller(), address(optionToken), long, short);
+        (uint256 long, uint256 short) = optionToken.mintOptions(caller);
+        emit Minted(caller, address(optionToken), long, short);
         return (long, short);
     }
 
