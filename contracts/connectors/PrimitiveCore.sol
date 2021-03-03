@@ -151,7 +151,8 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     {
         require(msg.value > 0, "PrimitiveCore: ZERO");
 
-        _depositETH();
+        _weth.deposit.value(msg.value)();
+        
         uint256 long =
             CoreLib.getProportionalLongOptions(optionToken, msg.value);
         _transferFromCaller(address(optionToken), long);
