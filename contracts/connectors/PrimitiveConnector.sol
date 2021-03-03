@@ -33,7 +33,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 // Primitive
 import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
-import {Registered} from "./Registered.sol";
 import {
     IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
@@ -43,7 +42,7 @@ import {CoreLib} from "../libraries/CoreLib.sol";
 
 import "hardhat/console.sol";
 
-abstract contract PrimitiveConnector is Registered, Context {
+abstract contract PrimitiveConnector is Context {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
 
     IWETH internal _weth;
@@ -54,13 +53,19 @@ abstract contract PrimitiveConnector is Registered, Context {
 
     constructor(
         address weth_,
-        address primitiveRouter_,
-        address registry_
-    ) public Registered(registry_) {
-        require(address(_weth) == address(0x0), "Connector: INITIALIZED");
+        address primitiveRouter_
+    ) public {
         _weth = IWETH(weth_);
         _primitiveRouter = IPrimitiveRouter(primitiveRouter_);
         checkApproval(weth_, primitiveRouter_);
+    }
+
+    /**
+     * @notice Reverts if the `option` is not deployed from the Primitive Registry.
+     */
+    modifier onlyRegistered(IOption option) {
+        require(_primitiveRouter.validOptions(address(option)), "PrimitiveSwaps: EVIL_OPTION");
+        _;
     }
 
     // ===== Functions =====

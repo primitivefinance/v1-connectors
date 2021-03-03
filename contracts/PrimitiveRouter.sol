@@ -90,6 +90,8 @@ contract PrimitiveRouter is
     bool public initialized;
     bool public _halt;
 
+    mapping(address => bool) internal _validOptions;
+
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
 
@@ -154,6 +156,31 @@ contract PrimitiveRouter is
     function halt() external {
         require(deployer == _msgSender(), "NOT_DEPLOYER");
         _halt = true;
+    }
+
+    function validateOption(address option) external notHalted {
+      IOption _option = IOption(option);
+      require(
+        isRegistered(_option),
+            "EVIL_OPTION"
+          );
+      _validOptions[option] = true;
+    }
+
+    /**
+     * @notice  Checks an option against the Primitive Registry.
+     * @return  Whether or not the option was deployed from the Primitive Registry.
+     */
+    function isRegistered(IOption option) internal view returns (bool) {
+        return (address(option) ==
+            registry.getOptionAddress(
+                option.getUnderlyingTokenAddress(),
+                option.getStrikeTokenAddress(),
+                option.getBaseValue(),
+                option.getQuoteValue(),
+                option.getExpiryTime()
+            ) &&
+            address(option) != address(0));
     }
 
     // ===== Operations =====
@@ -234,5 +261,9 @@ contract PrimitiveRouter is
 
     function getCaller() public view override returns (address) {
         return _CALLER;
+    }
+
+    function validOptions(address option) external view override returns (bool) {
+      return _validOptions[option];
     }
 }

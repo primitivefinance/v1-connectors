@@ -66,7 +66,7 @@ describe('Core', function () {
     router = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
 
     // 5. deploy connector
-    connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
+    connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
     await router.init(connector.address, AddressZero, AddressZero)
 
     // Option and Redeem token instances for parameters
@@ -74,6 +74,7 @@ describe('Core', function () {
 
     // Long and short tokens
     optionToken = Primitive.optionToken
+    await router.validateOption(optionToken.address)
     redeemToken = Primitive.redeemToken
 
     let contractNames: string[] = ['Router']
@@ -324,8 +325,9 @@ describe('Core', function () {
     beforeEach(async () => {
       // Deploy a new router & connector instance
       router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
-      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
+      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
       await router.init(connector.address, AddressZero, AddressZero)
+      await router.validateOption(optionToken.address)
       // Approve the tokens that are being used
       await baseToken.approve(router.address, MILLION_ETHER)
       await quoteToken.approve(router.address, MILLION_ETHER)
@@ -377,8 +379,9 @@ describe('Core', function () {
 
       // Deploy a new router instance
       router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
-      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
+      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
       await router.init(connector.address, AddressZero, AddressZero)
+      await router.validateOption(optionToken.address)
 
       // Approve tokens for router to use
       await weth.approve(router.address, MILLION_ETHER)

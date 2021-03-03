@@ -44,4 +44,6 @@ interface IPrimitiveRouter {
     // ==== View ====
 
     function getCaller() external view returns (address);
+
+    function validOptions(address option) external view returns (bool);
 }
