@@ -1,5 +1,4 @@
-import { assert, expect } from 'chai'
-import chai from 'chai'
+import chai, { assert, expect } from 'chai'
 import { solidity } from 'ethereum-waffle'
 chai.use(solidity)
 import * as utils from './lib/utils'
@@ -9,10 +8,15 @@ import { parseEther, formatEther } from 'ethers/lib/utils'
 import UniswapV2Pair from '@uniswap/v2-core/build/UniswapV2Pair.json'
 import batchApproval from './lib/batchApproval'
 import { sortTokens } from './lib/utils'
-import { BigNumber } from 'ethers'
+import { BigNumber, Contract } from 'ethers'
 import { ethers, waffle } from 'hardhat'
-const { assertBNEqual } = utils
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
+const { assertBNEqual, assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
+const { FAIL } = constants.ERR_CODES
+import { deploy, deployTokens, deployWeth, tokenFromAddress } from './lib/erc20'
+import { Done } from '@material-ui/icons'
+const { AddressZero } = ethers.constants
 
 const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
   let amountA, amountB
@@ -90,7 +94,46 @@ const getPremium = (quantityOptions, base, quote, redeemToken, underlyingToken, 
   return premium
 }
 
-describe('PrimitiveRouter', () => {
+const addShortLiquidityWithUnderlying = (connector: Contract, args: any[]) => {
+  let params: any = connector.interface.encodeFunctionData('addShortLiquidityWithUnderlying', args)
+  return params
+}
+
+const addShortLiquidityWithUnderlyingWithPermit = async (
+  router: Contract,
+  connector: Contract,
+  args: any[],
+  signer: SignerWithAddress
+) => {
+  let params: any = connector.interface.encodeFunctionData('addShortLiquidityWithUnderlyingWithPermit', args)
+  await expect(router.connect(signer).executeCall(connector, params)).to.emit(connector, 'AddLiquidity')
+}
+const addShortLiquidityWithETH = async (connector: Contract, args: any[]) => {
+  let params: any = connector.interface.encodeFunctionData('addShortLiquidityWithETH', args)
+  return params
+}
+
+const removeShortLiquidityThenCloseOptions = (connector: Contract, args: any[]) => {
+  let params: any = connector.interface.encodeFunctionData('removeShortLiquidityThenCloseOptions', args)
+  return params
+}
+
+const removeShortLiquidityThenCloseOptionsWithPermit = (connector: Contract, args: any[]) => {
+  let params: any = connector.interface.encodeFunctionData('removeShortLiquidityThenCloseOptionsWithPermit', args)
+  return params
+}
+
+const openFlashLong = (connector: Contract, args: any[]) => {
+  let params: any = connector.interface.encodeFunctionData('openFlashLong', args)
+  return params
+}
+
+const getParams = (connector: Contract, method: string, args: any[]) => {
+  let params: any = connector.interface.encodeFunctionData(method, args)
+  return params
+}
+
+describe('PrimitiveLiquidity', function () {
   // ACCOUNTS
   let Admin, User, Alice, Bob
 
@@ -98,12 +141,13 @@ describe('PrimitiveRouter', () => {
   let underlyingToken, strikeToken
   let base, quote, expiry
   let Primitive, registry
-  let uniswapFactory, uniswapRouter, primitiveRouter
+  let uniswapFactory: Contract, uniswapRouter: Contract, primitiveRouter
   let premium, assertInvariant, reserves, reserve0, reserve1
+  let connector, tokens, signers
   // regular deadline
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
-  assertInvariant = async () => {
+  /* assertInvariant = async function () {
     if (typeof optionToken === 'undefined') {
       return
     }
@@ -111,14 +155,10 @@ describe('PrimitiveRouter', () => {
     assertBNEqual(await redeemToken.balanceOf(primitiveRouter.address), '0')
     assertBNEqual(await teth.balanceOf(primitiveRouter.address), '0')
     assertBNEqual(await dai.balanceOf(primitiveRouter.address), '0')
-  }
+  } */
 
-  afterEach(async () => {
-    await assertInvariant()
-  })
-
-  before(async () => {
-    let signers = await setup.newWallets()
+  before(async function () {
+    signers = await ethers.getSigners()
 
     // Signers
     Admin = signers[0]
@@ -129,9 +169,9 @@ describe('PrimitiveRouter', () => {
     Bob = User.address
 
     // Underlying and quote token instances
-    weth = await setup.newWeth(Admin)
-    teth = await setup.newERC20(Admin, 'TEST ETH', 'TETH', MILLION_ETHER)
-    dai = await setup.newERC20(Admin, 'TEST DAI', 'DAI', MILLION_ETHER)
+    weth = await deployWeth(Admin)
+    tokens = await deployTokens(Admin, 2, ['teth', 'dai'])
+    ;[teth, dai] = tokens
     quoteToken = dai
 
     // Administrative contract instances
@@ -155,20 +195,20 @@ describe('PrimitiveRouter', () => {
     redeemToken = Primitive.redeemToken
 
     // Trader Instance
-    trader = await setup.newTrader(Admin, teth.address)
+    trader = await setup.newTrader(Admin, weth.address)
 
     // Uniswap Connector contract
-    primitiveRouter = await setup.newTestRouter(Admin, [
-      weth.address,
-      uniswapRouter.address,
-      uniswapFactory.address,
-      registry.address,
-    ])
+    primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
+    connector = await deploy('PrimitiveSwaps', {
+      from: signers[0],
+      args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+    })
+    await primitiveRouter.init(connector.address, connector.address, connector.address)
 
     // Approve all tokens and contracts
     await batchApproval(
       [trader.address, primitiveRouter.address, uniswapRouter.address],
-      [underlyingToken, strikeToken, optionToken, redeemToken],
+      [underlyingToken, strikeToken, optionToken, redeemToken, teth, weth, dai],
       [Admin]
     )
 
@@ -208,381 +248,18 @@ describe('PrimitiveRouter', () => {
     )
   })
 
-  describe('public variables', () => {
-    it('router()', async () => {
-      assert.equal(await primitiveRouter.router(), uniswapRouter.address)
+  describe('public variables', function () {
+    it('getRouter()', async function () {
+      assert.equal(await connector.getRouter(), uniswapRouter.address)
     })
-    it('factory()', async () => {
-      assert.equal(await primitiveRouter.factory(), uniswapFactory.address)
-    })
-    it('getName()', async () => {
-      assert.equal(await primitiveRouter.getName(), 'PrimitiveRouter')
-    })
-    it('getVersion()', async () => {
-      assert.equal(await primitiveRouter.getVersion(), 1)
+    it('getFactory()', async function () {
+      assert.equal(await connector.getFactory(), uniswapFactory.address)
     })
   })
 
   describe('uniswapV2Call', () => {
     it('uniswapV2Call()', async () => {
       await expect(primitiveRouter.uniswapV2Call(Alice, '0', '0', ['1'])).to.be.reverted
-    })
-  })
-
-  describe('mintOptionsThenFlashCloseLong()', () => {
-    before(async () => {
-      // Administrative contract instances
-      registry = await setup.newRegistry(Admin)
-      // Option and redeem instances
-      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
-      optionToken = Primitive.optionToken
-      redeemToken = Primitive.redeemToken
-
-      // Approve all tokens and contracts
-      await batchApproval(
-        [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
-
-      premium = 10
-
-      // Create UNISWAP PAIRS
-      const ratio = 1050
-      const totalOptions = parseEther('20')
-      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await trader.safeMint(optionToken.address, totalOptions.add(parseEther('10')), Alice)
-
-      // Add liquidity to redeem <> teth pair
-      await uniswapRouter.addLiquidity(
-        redeemToken.address,
-        teth.address,
-        totalRedeemForPair,
-        totalOptions,
-        0,
-        0,
-        Alice,
-        deadline
-      )
-    })
-
-    it('should mint Primitive V1 Options then flashCloseLong the long option tokens', async () => {
-      // Get the affected balances before the operation.
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
-      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
-      let optionTokenAddress = optionToken.address
-      let optionsToMint = parseEther('0.1')
-      let amountIn = optionsToMint.mul(quote).div(base)
-      let minPayout = await primitiveRouter.getClosePremium(optionTokenAddress, amountIn)
-
-      // Call the function
-      // transfersFrom underlyingToken `optionsToMint` amount to mint options. Then swaps in unsiwap pair
-      // for underlying tokens.
-      // change = (-optionsToMint + amoutOutMin)
-      await expect(primitiveRouter.mintOptionsThenFlashCloseLong(optionTokenAddress, optionsToMint, minPayout[0]))
-        .to.emit(primitiveRouter, 'WroteOption')
-        .withArgs(Alice, optionsToMint)
-
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
-      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
-
-      // Used underlyings to mint options (Alice)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore).toString()
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore).toString()
-
-      assertBNEqual(redeemChange, amountIn)
-      assert.equal(
-        underlyingChange >= minPayout[0].add(optionsToMint.mul(-1)),
-        true,
-        `underlyingDelta ${formatEther(underlyingChange)} != minPayout ${formatEther(minPayout[0])}`
-      )
-      assertBNEqual(await optionToken.balanceOf(primitiveRouter.address), '0')
-    })
-
-    it('should revert if quantity is zero', async () => {
-      let optionTokenAddress = optionToken.address
-      let optionsToMint = parseEther('0')
-      let amountOutMin = parseEther('0')
-
-      // Call the function
-      await expect(
-        primitiveRouter.mintOptionsThenFlashCloseLong(optionTokenAddress, optionsToMint, amountOutMin)
-      ).to.be.revertedWith('ERR_ZERO')
-    })
-
-    it('should revert if quantity is minPayout is not zero and theres a negative premium', async () => {
-      let optionTokenAddress = optionToken.address
-      let optionsToMint = parseEther('1')
-      let minPayout = '1'
-
-      await expect(primitiveRouter.mintOptionsThenFlashCloseLong(optionTokenAddress, optionsToMint, minPayout)).to.be
-        .reverted
-    })
-  })
-
-  describe('addShortLiquidityWithUnderlying()', () => {
-    before(async () => {
-      // Administrative contract instances
-      registry = await setup.newRegistry(Admin)
-      // Option and redeem instances
-      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
-      optionToken = Primitive.optionToken
-      redeemToken = Primitive.redeemToken
-
-      // Approve all tokens and contracts
-      await batchApproval(
-        [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
-
-      premium = 10
-
-      // Create UNISWAP PAIRS
-      const ratio = 1050
-      const totalOptions = parseEther('20')
-      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await trader.safeMint(optionToken.address, totalOptions.add(parseEther('10')), Alice)
-
-      // Add liquidity to redeem <> teth pair
-      await uniswapRouter.addLiquidity(
-        redeemToken.address,
-        teth.address,
-        totalRedeemForPair,
-        totalOptions,
-        0,
-        0,
-        Alice,
-        deadline
-      )
-    })
-
-    it('use underlyings to mint options, then provide short options and underlying tokens as liquidity', async () => {
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
-      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
-      let optionBalanceBefore = await optionToken.balanceOf(Alice)
-
-      let optionAddress = optionToken.address
-      let amountOptions = parseEther('0.1')
-      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
-      let to = Alice
-
-      let path = [redeemToken.address, underlyingToken.address]
-
-      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
-      reserves = [reserveA, reserveB]
-
-      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
-
-      ;[, amountBMin] = await _addLiquidity(
-        uniswapRouter,
-        reserves,
-        amountADesired,
-        amountBDesired,
-        amountAOptimal,
-        amountBOptimal
-      )
-
-      await primitiveRouter.addShortLiquidityWithUnderlying(
-        optionAddress,
-        amountOptions,
-        amountBDesired,
-        amountBMin,
-        to,
-        deadline
-      )
-
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
-      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
-      let optionBalanceAfter = await optionToken.balanceOf(Alice)
-
-      // Used underlyings to mint options (Alice)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore)
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
-
-      const expectedUnderlyingChange = amountOptions.mul(quote).div(base).mul(reserveB).div(reserveA).add(amountOptions)
-
-      assertBNEqual(optionChange.toString(), amountOptions) // kept options
-      assertBNEqual(redeemChange.toString(), '0') // kept options
-      assertBNEqual(underlyingChange, expectedUnderlyingChange.mul(-1))
-    })
-
-    it('should revert if amountBMin is greater than optimal amountB', async () => {
-      // assume the pair has a ratio of redeem : teth of 100 : 1.
-      // If we attempt to provide 100 short tokens, we need to imply a price ratio when we call the function.
-      // If we imply a ratio that is less than 100 : 1, it should revert.
-
-      let optionAddress = optionToken.address
-      let amountOptions = parseEther('0.1')
-      // skew the amountADesired ratio to be more, so the transaction reverts
-      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
-      let to = Alice
-
-      let path = [redeemToken.address, underlyingToken.address]
-
-      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
-      reserves = [reserveA, reserveB]
-
-      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
-
-      ;[, amountBMin] = await _addLiquidity(
-        uniswapRouter,
-        reserves,
-        amountADesired,
-        amountBDesired,
-        amountAOptimal,
-        amountBOptimal
-      )
-
-      await expect(
-        primitiveRouter.addShortLiquidityWithUnderlying(
-          optionAddress,
-          amountOptions,
-          amountBDesired.add(1),
-          BigNumber.from(amountBMin).add(1),
-          to,
-          deadline
-        )
-      ).to.be.revertedWith('UniswapV2Router: INSUFFICIENT_B_AMOUNT')
-    })
-
-    it('should revert if amountAMin is less than amountAOptimal', async () => {
-      // assume the pair has a ratio of redeem : teth of 100 : 1.
-      // If we attempt to provide 100 short tokens, we need to imply a ratio.
-      // If we imply a ratio that is less than 100 : 1, it should revert.
-
-      let optionAddress = optionToken.address
-      let amountOptions = parseEther('0.1')
-      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
-      let to = Alice
-
-      let path = [redeemToken.address, underlyingToken.address]
-
-      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
-      reserves = [reserveA, reserveB]
-
-      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
-
-      ;[, amountBMin] = await _addLiquidity(
-        uniswapRouter,
-        reserves,
-        amountADesired,
-        amountBDesired,
-        amountAOptimal,
-        amountBOptimal
-      )
-
-      await expect(
-        primitiveRouter.addShortLiquidityWithUnderlying(
-          optionAddress,
-          amountOptions,
-          amountBDesired.sub(1),
-          amountBMin,
-          to,
-          deadline
-        )
-      ).to.be.revertedWith('UniswapV2Router: INSUFFICIENT_A_AMOUNT')
-    })
-  })
-
-  describe('removeShortLiquidityThenCloseOptions()', () => {
-    before(async () => {
-      // Administrative contract instances
-      registry = await setup.newRegistry(Admin)
-      // Option and redeem instances
-      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
-      optionToken = Primitive.optionToken
-      redeemToken = Primitive.redeemToken
-
-      // Approve all tokens and contracts
-      await batchApproval(
-        [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
-
-      premium = 10
-
-      // Create UNISWAP PAIRS
-      const ratio = 1050
-      const totalOptions = parseEther('20')
-      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await trader.safeMint(optionToken.address, totalOptions.add(parseEther('10')), Alice)
-
-      // Add liquidity to redeem <> teth pair
-      await uniswapRouter.addLiquidity(
-        redeemToken.address,
-        teth.address,
-        totalRedeemForPair,
-        totalOptions,
-        0,
-        0,
-        Alice,
-        deadline
-      )
-    })
-
-    it('burns UNI-V2 lp shares, then closes the withdrawn shortTokens', async () => {
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
-      let quoteBalanceBefore = await quoteToken.balanceOf(Alice)
-      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
-      let optionBalanceBefore = await optionToken.balanceOf(Alice)
-
-      let optionAddress = optionToken.address
-      let liquidity = parseEther('0.1')
-      let path = [redeemToken.address, teth.address]
-      let pairAddress = await uniswapFactory.getPair(path[0], path[1])
-      let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
-      await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
-      assert.equal((await pair.balanceOf(Alice)) >= liquidity, true, 'err not enough pair tokens')
-      assert.equal(pairAddress != constants.ADDRESSES.ZERO_ADDRESS, true, 'err pair not deployed')
-
-      let totalSupply = await pair.totalSupply()
-      let amount0 = liquidity.mul(await redeemToken.balanceOf(pairAddress)).div(totalSupply)
-      let amount1 = liquidity.mul(await teth.balanceOf(pairAddress)).div(totalSupply)
-
-      let amountAMin = amount0
-      let amountBMin = amount1
-      let to = Alice
-
-      await primitiveRouter.removeShortLiquidityThenCloseOptions(
-        optionAddress,
-        liquidity,
-        amountAMin,
-        amountBMin,
-        to,
-        deadline
-      )
-
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
-      let quoteBalanceAfter = await quoteToken.balanceOf(Alice)
-      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
-      let optionBalanceAfter = await optionToken.balanceOf(Alice)
-
-      // Used underlyings to mint options (Alice)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore)
-      // Purchased quoteTokens with our options (Alice)
-      let quoteChange = quoteBalanceAfter.sub(quoteBalanceBefore)
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
-
-      assertBNEqual(underlyingChange.toString(), amountAMin.mul(base).div(quote).add(amountBMin))
-      assertBNEqual(optionChange.toString(), amountAMin.mul(base).div(quote).mul(-1))
-      assertBNEqual(quoteChange.toString(), '0')
-      assert(redeemChange.gt(0) || redeemChange.isZero() == true, `Redeem change is not gt 0`)
     })
   })
 
@@ -595,10 +272,17 @@ describe('PrimitiveRouter', () => {
       optionToken = Primitive.optionToken
       redeemToken = Primitive.redeemToken
 
+      primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
+      connector = await deploy('PrimitiveSwaps', {
+        from: signers[0],
+        args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+      })
+      await primitiveRouter.init(connector.address, connector.address, connector.address)
+
       // Approve all tokens and contracts
       await batchApproval(
         [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
+        [underlyingToken, strikeToken, optionToken, redeemToken, teth, weth, dai],
         [Admin]
       )
 
@@ -641,9 +325,14 @@ describe('PrimitiveRouter', () => {
       let premium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       premium = premium.gt(0) ? premium : parseEther('0')
 
-      await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, premium))
+      let params = getParams(connector, 'openFlashLong', [optionToken.address, amountOptions, premium])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params))
+        .to.emit(connector, 'Buy')
+        .withArgs(Alice, optionToken.address, amountOptions, premium)
+        .to.emit(primitiveRouter, 'Executed')
+      /* await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, premium))
         .to.emit(primitiveRouter, 'FlashOpened')
-        .withArgs(primitiveRouter.address, amountOptions, premium)
+        .withArgs(primitiveRouter.address, amountOptions, premium) */
 
       let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
       let quoteBalanceAfter = await quoteToken.balanceOf(Alice)
@@ -675,26 +364,36 @@ describe('PrimitiveRouter', () => {
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
       let maxPremium = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       maxPremium = maxPremium.gt(0) ? maxPremium : parseEther('0')
-      await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, maxPremium.sub(1))).to.be.revertedWith(
+      let params = getParams(connector, 'openFlashLong', [optionToken.address, amountOptions, maxPremium.sub(1)])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+      /* await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, maxPremium.sub(1))).to.be.revertedWith(
         'ERR_UNISWAPV2_CALL_FAIL'
-      )
+      ) */
     })
 
     it('should do a normal flash close', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '1')).to.emit(
+      let params = getParams(connector, 'closeFlashLong', [optionToken.address, amountRedeems, '1'])
+      let closePremium = await connector.getClosePremium(optionToken.address, amountRedeems)
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params))
+        .to.emit(connector, 'Sell')
+        .withArgs(Alice, optionToken.address, amountRedeems, closePremium)
+        .to.emit(primitiveRouter, 'Executed')
+      /* await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '1')).to.emit(
         primitiveRouter,
         'FlashClosed'
-      )
+      ) */
     })
 
     it('should revert with premium over max', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, amountRedeems)).to.be.revertedWith(
+      let params = getParams(connector, 'closeFlashLong', [optionToken.address, amountRedeems, amountRedeems])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+      /*  await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, amountRedeems)).to.be.revertedWith(
         'ERR_UNISWAPV2_CALL_FAIL'
-      )
+      ) */
     })
 
     it('should revert flash loan quantity is zero', async () => {
@@ -704,9 +403,11 @@ describe('PrimitiveRouter', () => {
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
       let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
 
-      await expect(
+      let params = getParams(connector, 'openFlashLong', [optionToken.address, amountOptions, amountOutMin.add(1)])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+      /* await expect(
         primitiveRouter.openFlashLong(optionToken.address, amountOptions, amountOutMin.add(1))
-      ).to.be.revertedWith('INSUFFICIENT_OUTPUT_AMOUNT')
+      ).to.be.revertedWith('INSUFFICIENT_OUTPUT_AMOUNT') */
     })
   })
 
@@ -719,10 +420,17 @@ describe('PrimitiveRouter', () => {
       optionToken = Primitive.optionToken
       redeemToken = Primitive.redeemToken
 
+      primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
+      connector = await deploy('PrimitiveSwaps', {
+        from: signers[0],
+        args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+      })
+      await primitiveRouter.init(connector.address, connector.address, connector.address)
+
       // Approve all tokens and contracts
       await batchApproval(
         [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
+        [underlyingToken, strikeToken, optionToken, redeemToken, teth, weth, dai],
         [Admin]
       )
 
@@ -759,9 +467,11 @@ describe('PrimitiveRouter', () => {
     it('should revert on flash close because it would cost the user a negative payout', async () => {
       // Get the pair instance to approve it to the primitiveRouter
       let amountRedeems = parseEther('0.1')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '1')).to.be.revertedWith(
+      let params = getParams(connector, 'closeFlashLong', [optionToken.address, amountRedeems, '1'])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+      /* await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '1')).to.be.revertedWith(
         'ERR_UNISWAPV2_CALL_FAIL'
-      )
+      ) */
     })
 
     it('should flash close a long position at the expense of the user', async () => {
@@ -772,10 +482,15 @@ describe('PrimitiveRouter', () => {
       let optionBalanceBefore = await optionToken.balanceOf(Alice)
 
       let amountRedeems = parseEther('0.01')
-      await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '0')).to.emit(
+      let params = getParams(connector, 'closeFlashLong', [optionToken.address, amountRedeems, '0'])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params))
+        .to.emit(connector, 'Sell')
+        .withArgs(Alice, optionToken.address, amountRedeems, premium)
+        .to.emit(primitiveRouter, 'Executed')
+      /* await expect(primitiveRouter.closeFlashLong(optionToken.address, amountRedeems, '0')).to.emit(
         primitiveRouter,
         'FlashClosed'
-      )
+      ) */
 
       let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
       let quoteBalanceAfter = await quoteToken.balanceOf(Alice)
@@ -806,10 +521,17 @@ describe('PrimitiveRouter', () => {
       optionToken = Primitive.optionToken
       redeemToken = Primitive.redeemToken
 
+      primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
+      connector = await deploy('PrimitiveSwaps', {
+        from: signers[0],
+        args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+      })
+      await primitiveRouter.init(connector.address, connector.address, connector.address)
+
       // Approve all tokens and contracts
       await batchApproval(
         [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
+        [underlyingToken, strikeToken, optionToken, redeemToken, teth, weth, dai],
         [Admin]
       )
 
@@ -850,9 +572,14 @@ describe('PrimitiveRouter', () => {
       let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
       let amountOutMin = getPremium(amountOptions, base, quote, redeemToken, underlyingToken, reserves[0], reserves[1])
       amountOutMin = amountOutMin.gt(0) ? amountOutMin : parseEther('0')
-      await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, amountOutMin))
+      let params = getParams(connector, 'openFlashLong', [optionToken.address, amountOptions, amountOutMin])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params))
+        .to.emit(connector, 'Buy')
+        .withArgs(Alice, optionToken.address, amountOptions, amountOutMin)
+        .to.emit(primitiveRouter, 'Executed')
+      /*  await expect(primitiveRouter.openFlashLong(optionToken.address, amountOptions, amountOutMin))
         .to.emit(primitiveRouter, 'FlashOpened')
-        .withArgs(primitiveRouter.address, amountOptions, '0')
+        .withArgs(primitiveRouter.address, amountOptions, '0') */
     })
   })
 })
