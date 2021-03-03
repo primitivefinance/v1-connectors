@@ -221,6 +221,12 @@ describe('Router', function () {
       ).to.be.revertedWith("CONTRACT_HALTED")
     })
 
+    it('Only deployer can halt', async () => {
+      await expect(
+        router.connect(signers[2]).halt()
+      ).to.be.revertedWith("NOT_DEPLOYER")
+    })
+
     it('should handle multiple transactions', async () => {
       // Start with 1000 options
       //await baseToken.deposit({ value: THOUSAND_ETHER })

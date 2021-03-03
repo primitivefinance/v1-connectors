@@ -214,6 +214,11 @@ describe('Core', function () {
       await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
     })
 
+    it('should revert if optionToken.address is a contract other than a legitimate option', async () => {
+      params = connector.interface.encodeFunctionData('safeExerciseForETH', [connector.address, parseEther('0.1')])
+      await expect(router.executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+    })
+
     it('should revert if user does not have enough optionToken tokens', async () => {
       params = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, MILLION_ETHER])
       // Fails early by checking the user's optionToken balance against the quantity of options they wish to exercise.
