@@ -117,16 +117,6 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         bytes32 r,
         bytes32 s
     ) external onlyRegistered(optionToken) returns (uint256, uint256) {
-        // Permit minting using the caller's underlying tokens
-        IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
-            getCaller(),
-            address(this),
-            uint256(-1),
-            deadline,
-            v,
-            r,
-            s
-        );
         (uint256 long, uint256 short) =
             _mintOptionsPermitted(optionToken, amount);
         emit Minted(getCaller(), address(optionToken), long, short);
