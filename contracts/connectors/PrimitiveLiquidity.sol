@@ -91,10 +91,9 @@ contract PrimitiveLiquidity is
     constructor(
         address weth_,
         address primitiveRouter_,
-        address registry_,
         address factory_,
         address router_
-    ) public PrimitiveConnector(weth_, primitiveRouter_, registry_) {
+    ) public PrimitiveConnector(weth_, primitiveRouter_) {
         factory = IUniswapV2Factory(factory_);
         router = IUniswapV2Router02(router_);
         emit Initialized(_msgSender());
@@ -129,14 +128,7 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
-<<<<<<< HEAD
         require(_primitiveRouter.validOptions(optionAddress), "PrimitiveSwaps: EVIL_OPTION");
-=======
-        require(
-            isRegistered(IOption(optionAddress)),
-            "PrimitiveSwaps: EVIL_OPTION"
-        );
->>>>>>> 251f3ea... feat(liq-tests): Adds liquidity tests. Needs more work.
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;

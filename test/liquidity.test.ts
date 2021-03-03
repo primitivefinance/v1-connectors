@@ -15,7 +15,7 @@ const { assertBNEqual, assertWithinError, verifyOptionInvariants, getTokenBalanc
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
 const { FAIL } = constants.ERR_CODES
 import { deploy, deployTokens, deployWeth, tokenFromAddress } from './lib/erc20'
-import { Done } from '@material-ui/icons'
+//import { Done } from '@material-ui/icons'
 const { AddressZero } = ethers.constants
 
 const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
@@ -193,9 +193,10 @@ describe('PrimitiveLiquidity', function () {
     primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
     connector = await deploy('PrimitiveLiquidity', {
       from: signers[0],
-      args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+      args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
     })
     await primitiveRouter.init(connector.address, connector.address, connector.address)
+    await primitiveRouter.validateOption(optionToken.address)
 
     // Approve all tokens and contracts
     await batchApproval(
@@ -261,9 +262,10 @@ describe('PrimitiveLiquidity', function () {
       primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
       connector = await deploy('PrimitiveLiquidity', {
         from: signers[0],
-        args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+        args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
       })
       await primitiveRouter.init(connector.address, connector.address, connector.address)
+      await primitiveRouter.validateOption(optionToken.address)
 
       // Approve all tokens and contracts
       await batchApproval(
@@ -467,9 +469,10 @@ describe('PrimitiveLiquidity', function () {
       primitiveRouter = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
       connector = await deploy('PrimitiveLiquidity', {
         from: signers[0],
-        args: [weth.address, primitiveRouter.address, registry.address, uniswapFactory.address, uniswapRouter.address],
+        args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
       })
       await primitiveRouter.init(connector.address, connector.address, connector.address)
+      await primitiveRouter.validateOption(optionToken.address)
 
       // Approve all tokens and contracts
       await batchApproval(
