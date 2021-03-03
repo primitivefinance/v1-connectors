@@ -121,7 +121,7 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountOptions,
         uint256 maxPremium
-    ) external override nonReentrant returns (bool) {
+    ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, address underlying, ) =
             getOptionPair(optionToken);
@@ -156,6 +156,7 @@ contract PrimitiveSwaps is
         external
         payable
         override
+        onlyRegistered(optionToken)
         returns (bool)
     {
         require(msg.value > 0, "PrimitiveSwaps: ZERO");
@@ -194,7 +195,7 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountRedeems,
         uint256 minPayout
-    ) external override nonReentrant returns (bool) {
+    ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
         _flashSwap(
@@ -229,7 +230,7 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountRedeems,
         uint256 minPayout
-    ) external override nonReentrant returns (bool) {
+    ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
         _flashSwap(

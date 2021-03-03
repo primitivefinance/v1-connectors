@@ -125,6 +125,7 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
+        require(isRegistered(IOption(optionAddress)), "PrimitiveSwaps: EVIL_OPTION");
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;
@@ -280,6 +281,7 @@ contract PrimitiveLiquidity is
         public
         payable
         override
+        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
@@ -390,7 +392,7 @@ contract PrimitiveLiquidity is
         uint256 amountBMin,
         address to,
         uint256 deadline
-    ) public override nonReentrant returns (uint256) {
+    ) public override nonReentrant onlyRegistered(IOption(optionAddress)) returns (uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
@@ -459,7 +461,7 @@ contract PrimitiveLiquidity is
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external override returns (uint256) {
+    ) external override onlyRegistered(IOption(optionAddress)) returns (uint256) {
         IOption optionToken = IOption(optionAddress);
         uint256 liquidity_ = liquidity;
         uint256 deadline_ = deadline;
