@@ -76,9 +76,8 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
 
     constructor(
         address weth_,
-        address primitiveRouter_,
-        address registry_
-    ) public PrimitiveConnector(weth_, primitiveRouter_, registry_) {
+        address primitiveRouter_
+    ) public PrimitiveConnector(weth_, primitiveRouter_) {
         emit Initialized(_msgSender());
     }
 

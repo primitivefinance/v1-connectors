@@ -90,9 +90,8 @@ contract PrimitiveLiquidity is
     // ===== Constructor =====
     constructor(
         address weth_,
-        address primitiveRouter_,
-        address registry_
-    ) public PrimitiveConnector(weth_, primitiveRouter_, registry_) {
+        address primitiveRouter_
+    ) public PrimitiveConnector(weth_, primitiveRouter_) {
         emit Initialized(_msgSender());
     }
 
@@ -125,7 +124,7 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
-        require(isRegistered(IOption(optionAddress)), "PrimitiveSwaps: EVIL_OPTION");
+        require(_primitiveRouter.validOptions(optionAddress), "PrimitiveSwaps: EVIL_OPTION");
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;
