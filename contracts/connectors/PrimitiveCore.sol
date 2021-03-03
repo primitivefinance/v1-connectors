@@ -97,7 +97,6 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     {
         require(msg.value > 0, "ERR_ZERO");
         _weth.deposit.value(msg.value)();
-        address underlying = optionToken.getUnderlyingTokenAddress();
         IERC20(address(_weth)).safeTransfer(address(optionToken), msg.value);
         (uint256 long, uint256 short) = optionToken.mintOptions(getCaller());
         emit Minted(getCaller(), address(optionToken), long, short);
