@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat'
+import { ethers, waffle } from 'hardhat'
 
 // build
 import TestERC20 from '../../build/contracts/test/TestERC20.sol/TestERC20.json'
@@ -18,7 +18,7 @@ import PrimitiveRouterTest from '../../build/contracts/test/PrimitiveRouterTest.
 
 // Constants and Utility functions
 import constants from './constants'
-import { deployContract, link } from 'ethereum-waffle'
+const { deployContract, link } = waffle
 const { MILLION_ETHER } = constants.VALUES
 const { OPTION_TEMPLATE_LIB, REDEEM_TEMPLATE_LIB } = constants.LIBRARIES
 
