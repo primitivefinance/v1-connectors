@@ -152,16 +152,13 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         require(msg.value > 0, "PrimitiveCore: ZERO");
 
         _weth.deposit.value(msg.value)();
-        
+
         uint256 long =
             CoreLib.getProportionalLongOptions(optionToken, msg.value);
         _transferFromCaller(address(optionToken), long);
 
-        (uint256 strikes, uint256 options) =
-            _exerciseOptions(optionToken, long);
-
         emit Exercised(getCaller(), address(optionToken), long);
-        return (strikes, options);
+        return _exerciseOptions(optionToken, long);
     }
 
     /**
@@ -180,8 +177,6 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     {
         address underlying = optionToken.getUnderlyingTokenAddress();
         address strike = optionToken.getStrikeTokenAddress();
-        // Require the underlying token to be Weth.
-        require(underlying == address(_weth), "PrimitiveCore: NOT_WETH");
 
         uint256 strikeQuantity =
             CoreLib.getProportionalShortOptions(optionToken, exerciseQuantity);
@@ -224,9 +219,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         onlyRegistered(optionToken)
         returns (uint256)
     {
-        address strike = optionToken.getStrikeTokenAddress();
         // Require the strike token to be Weth.
-        require(strike == address(_weth), "PrimitiveCore: NOT_WETH");
         address redeem = optionToken.redeemToken();
         console.log("pulling");
         // Pull redeems
@@ -261,8 +254,6 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         )
     {
         address redeem = optionToken.redeemToken();
-        address underlying = optionToken.getUnderlyingTokenAddress();
-        require(underlying == address(_weth), "PrimitiveCore: NOT_WETH");
 
         uint256 short =
             CoreLib.getProportionalShortOptions(optionToken, closeQuantity);
