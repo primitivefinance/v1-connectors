@@ -14,6 +14,8 @@ import { ethers, waffle } from 'hardhat'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 const { assertBNEqual } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
+import { deploy, deployTokens, deployWeth, tokenFromAddress } from './lib/erc20'
+const { AddressZero } = ethers.constants
 
 const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
   let amountA, amountB
@@ -147,6 +149,7 @@ describe('PrimitiveLiquidity', () => {
   let Primitive, registry
   let uniswapFactory, uniswapRouter, primitiveRouter
   let premium, assertInvariant, reserves, reserve0, reserve1
+  let connector
   // regular deadline
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
@@ -211,6 +214,11 @@ describe('PrimitiveLiquidity', () => {
       uniswapFactory.address,
       registry.address,
     ])
+    connector = await deploy('PrimitiveCore', {
+      from: signers[0],
+      args: [weth.address, primitiveRouter.address, registry.address],
+    })
+    await primitiveRouter.init(connector.address, connector.address, connector.address)
 
     // Approve all tokens and contracts
     await batchApproval(
@@ -256,115 +264,11 @@ describe('PrimitiveLiquidity', () => {
   })
 
   describe('public variables', () => {
-    it('router()', async () => {
-      assert.equal(await primitiveRouter.router(), uniswapRouter.address)
+    it('getRouter()', async () => {
+      assert.equal(await connector.getRouter(), uniswapRouter.address)
     })
-    it('factory()', async () => {
-      assert.equal(await primitiveRouter.factory(), uniswapFactory.address)
-    })
-    it('getName()', async () => {
-      assert.equal(await primitiveRouter.getName(), 'PrimitiveRouter')
-    })
-    it('getVersion()', async () => {
-      assert.equal(await primitiveRouter.getVersion(), 1)
-    })
-  })
-
-  describe('uniswapV2Call', () => {
-    it('uniswapV2Call()', async () => {
-      await expect(primitiveRouter.uniswapV2Call(Alice, '0', '0', ['1'])).to.be.reverted
-    })
-  })
-
-  describe('mintOptionsThenFlashCloseLong()', () => {
-    before(async () => {
-      // Administrative contract instances
-      registry = await setup.newRegistry(Admin)
-      // Option and redeem instances
-      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
-      optionToken = Primitive.optionToken
-      redeemToken = Primitive.redeemToken
-
-      // Approve all tokens and contracts
-      await batchApproval(
-        [trader.address, primitiveRouter.address, uniswapRouter.address],
-        [optionToken, redeemToken],
-        [Admin]
-      )
-
-      premium = 10
-
-      // Create UNISWAP PAIRS
-      const ratio = 1050
-      const totalOptions = parseEther('20')
-      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
-      await trader.safeMint(optionToken.address, totalOptions.add(parseEther('10')), Alice)
-
-      // Add liquidity to redeem <> teth pair
-      await uniswapRouter.addLiquidity(
-        redeemToken.address,
-        teth.address,
-        totalRedeemForPair,
-        totalOptions,
-        0,
-        0,
-        Alice,
-        deadline
-      )
-    })
-
-    it('should mint Primitive V1 Options then flashCloseLong the long option tokens', async () => {
-      // Get the affected balances before the operation.
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
-      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
-      let optionTokenAddress = optionToken.address
-      let optionsToMint = parseEther('0.1')
-      let amountIn = optionsToMint.mul(quote).div(base)
-      let minPayout = await primitiveRouter.getClosePremium(optionTokenAddress, amountIn)
-
-      // Call the function
-      // transfersFrom underlyingToken `optionsToMint` amount to mint options. Then swaps in unsiwap pair
-      // for underlying tokens.
-      // change = (-optionsToMint + amoutOutMin)
-      await expect(primitiveRouter.mintOptionsThenFlashCloseLong(optionTokenAddress, optionsToMint, minPayout[0]))
-        .to.emit(primitiveRouter, 'WroteOption')
-        .withArgs(Alice, optionsToMint)
-
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
-      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
-
-      // Used underlyings to mint options (Alice)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore).toString()
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore).toString()
-
-      assertBNEqual(redeemChange, amountIn)
-      assert.equal(
-        underlyingChange >= minPayout[0].add(optionsToMint.mul(-1)),
-        true,
-        `underlyingDelta ${formatEther(underlyingChange)} != minPayout ${formatEther(minPayout[0])}`
-      )
-      assertBNEqual(await optionToken.balanceOf(primitiveRouter.address), '0')
-    })
-
-    it('should revert if quantity is zero', async () => {
-      let optionTokenAddress = optionToken.address
-      let optionsToMint = parseEther('0')
-      let amountOutMin = parseEther('0')
-
-      // Call the function
-      await expect(
-        primitiveRouter.mintOptionsThenFlashCloseLong(optionTokenAddress, optionsToMint, amountOutMin)
-      ).to.be.revertedWith('ERR_ZERO')
-    })
-
-    it('should revert if quantity is minPayout is not zero and theres a negative premium', async () => {
-      let optionTokenAddress = optionToken.address
-      let optionsToMint = parseEther('1')
-      let minPayout = '1'
-
-      await expect(primitiveRouter.mintOptionsThenFlashCloseLong(optionTokenAddress, optionsToMint, minPayout)).to.be
-        .reverted
+    it('getFactory()', async () => {
+      assert.equal(await connector.getFactory(), uniswapFactory.address)
     })
   })
 
@@ -434,13 +338,11 @@ describe('PrimitiveLiquidity', () => {
         amountBOptimal
       )
 
-      await primitiveRouter.addShortLiquidityWithUnderlying(
-        optionAddress,
-        amountOptions,
-        amountBDesired,
-        amountBMin,
-        to,
-        deadline
+      await addShortLiquidityWithUnderlying(
+        primitiveRouter,
+        connector,
+        [optionAddress, amountOptions, amountBDesired, amountBMin, to, deadline],
+        Admin
       )
 
       let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
