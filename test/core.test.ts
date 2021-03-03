@@ -19,7 +19,7 @@ const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = cons
 
 const { ERR_ZERO, ERR_BAL_STRIKE, ERR_NOT_EXPIRED, ERC20_TRANSFER_AMOUNT, FAIL } = constants.ERR_CODES
 
-describe('Core', function () {
+describe('PrimitiveCore', function () {
   let signers: SignerWithAddress[]
   let weth: Contract
   let router: Contract, connector: Contract

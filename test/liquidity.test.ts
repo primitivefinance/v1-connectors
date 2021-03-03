@@ -9,8 +9,9 @@ import { parseEther, formatEther } from 'ethers/lib/utils'
 import UniswapV2Pair from '@uniswap/v2-core/build/UniswapV2Pair.json'
 import batchApproval from './lib/batchApproval'
 import { sortTokens } from './lib/utils'
-import { BigNumber } from 'ethers'
+import { BigNumber, Contract } from 'ethers'
 import { ethers, waffle } from 'hardhat'
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 const { assertBNEqual } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
 
@@ -90,7 +91,53 @@ const getPremium = (quantityOptions, base, quote, redeemToken, underlyingToken, 
   return premium
 }
 
-describe('PrimitiveRouter', () => {
+const addShortLiquidityWithUnderlying = async (
+  router: Contract,
+  connector: Contract,
+  args: any[],
+  signer: SignerWithAddress
+) => {
+  let params: any = connector.interface.encodeFunctionData('addShortLiquidityWithUnderlying', args)
+  await expect(router.connect(signer).executeCall(connector, params)).to.emit(connector, 'AddLiquidity')
+}
+
+const addShortLiquidityWithUnderlyingWithPermit = async (
+  router: Contract,
+  connector: Contract,
+  args: any[],
+  signer: SignerWithAddress
+) => {
+  let params: any = connector.interface.encodeFunctionData('addShortLiquidityWithUnderlyingWithPermit', args)
+  await expect(router.connect(signer).executeCall(connector, params)).to.emit(connector, 'AddLiquidity')
+}
+const addShortLiquidityWithETH = async (router: Contract, connector: Contract, args: any[], signer: SignerWithAddress) => {
+  let params: any = connector.interface.encodeFunctionData('addShortLiquidityWithETH', args)
+  await expect(
+    router.connect(signer).executeCall(connector, params, { value: BigNumber.from(args[1]).add(args[2]) })
+  ).to.emit(connector, 'AddLiquidity')
+}
+
+const removeShortLiquidityThenCloseOptions = async (
+  router: Contract,
+  connector: Contract,
+  args: any[],
+  signer: SignerWithAddress
+) => {
+  let params: any = connector.interface.encodeFunctionData('removeShortLiquidityThenCloseOptions', args)
+  await expect(router.connect(signer).executeCall(connector, params)).to.emit(connector, 'RemoveLiquidity')
+}
+
+const removeShortLiquidityThenCloseOptionsWithPermit = async (
+  router: Contract,
+  connector: Contract,
+  args: any[],
+  signer: SignerWithAddress
+) => {
+  let params: any = connector.interface.encodeFunctionData('removeShortLiquidityThenCloseOptionsWithPermit', args)
+  await expect(router.connect(signer).executeCall(connector, params)).to.emit(connector, 'RemoveLiquidity')
+}
+
+describe('PrimitiveLiquidity', () => {
   // ACCOUNTS
   let Admin, User, Alice, Bob
 

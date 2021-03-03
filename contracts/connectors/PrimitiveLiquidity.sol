@@ -423,6 +423,7 @@ contract PrimitiveLiquidity is
         } else {
             _transferToCaller(underlying);
         }
+        emit RemoveLiquidity(getCaller(), optionAddress, liquidity);
         return (underlyingTokensWithdrawn.add(proceeds));
     }
 
