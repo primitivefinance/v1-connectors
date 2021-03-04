@@ -22,12 +22,6 @@
 pragma solidity ^0.6.2;
 
 import {
-    IUniswapV2Router02
-} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import {
-    IUniswapV2Factory
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import {
     IOption,
     IERC20
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
@@ -37,13 +31,9 @@ import {
 import {IWETH} from "./IWETH.sol";
 
 interface IPrimitiveRouter {
-    function executeCall(address connector, bytes calldata params)
-        external
-        payable;
+    function executeCall(address connector, bytes calldata params) external payable;
 
-    function transferFromCaller(address token, uint256 amount)
-        external
-        returns (bool);
+    function transferFromCaller(address token, uint256 amount) external returns (bool);
 
     function transferFromCallerToReceiver(
         address token,
@@ -51,19 +41,14 @@ interface IPrimitiveRouter {
         address receiver
     ) external returns (bool);
 
-    function setRegisteredOptions(
-        address[] calldata optionAddresses,
-        bool[] calldata isValid
-    ) external returns (bool);
+    function setRegisteredOptions(address[] calldata optionAddresses)
+        external
+        returns (bool);
 
     function setRegisteredConnectors(
         address[] calldata connectors,
         bool[] calldata isValid
     ) external returns (bool);
-
-    function init(address[] calldata connectors, bool[] calldata isValid)
-        external
-        returns (bool);
 
     function halt() external;
 
@@ -79,10 +64,7 @@ interface IPrimitiveRouter {
 
     function getRegisteredOption(address option) external view returns (bool);
 
-    function getRegisteredConnector(address connector)
-        external
-        view
-        returns (bool);
+    function getRegisteredConnector(address connector) external view returns (bool);
 
     function apiVersion() external pure returns (string memory);
 }

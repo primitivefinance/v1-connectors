@@ -7,11 +7,7 @@ pragma solidity ^0.6.2;
  * @author  Primitive
  */
 
-import {
-    PrimitiveRouter,
-    IUniswapV2Factory,
-    IUniswapV2Router02
-} from "../PrimitiveRouter.sol";
+import {PrimitiveRouter} from "../PrimitiveRouter.sol";
 
 contract PrimitiveRouterTest is PrimitiveRouter {
     constructor(
@@ -19,8 +15,5 @@ contract PrimitiveRouterTest is PrimitiveRouter {
         address router_,
         address factory_,
         address registry_
-    ) public PrimitiveRouter(weth_, registry_) {
-        factory = IUniswapV2Factory(factory_);
-        router = IUniswapV2Router02(router_);
-    }
+    ) public PrimitiveRouter(weth_, registry_) {}
 }
