@@ -230,6 +230,47 @@ contract PrimitiveLiquidity is
             );
     }
 
+    function addShortLiquidityWithUnderlyingWithDaiPermit(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+        IERC20Permit(underlying).permit(
+            getCaller(),
+            address(this),
+            IERC20Permit(underlying).nonces(getCaller()),
+            deadline,
+            true,
+            v,
+            r,
+            s
+        );
+
+        return
+            addShortLiquidityWithUnderlying(
+                optionAddress,
+                quantityOptions,
+                amountBMax,
+                amountBMin,
+                to,
+                deadline
+            );
+    }
+
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
      * @notice  Pulls underlying tokens from _msgSender() and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
