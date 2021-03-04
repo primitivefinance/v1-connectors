@@ -190,7 +190,7 @@ contract PrimitiveLiquidity is
      * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
-    /* function addShortLiquidityWithUnderlyingWithPermit(
+    function addShortLiquidityWithUnderlyingWithPermit(
         address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,
@@ -208,64 +208,27 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
-        uint256 amountA;
-        uint256 amountB;
-        uint256 liquidity;
-        {
-            IOption optionToken = IOption(optionAddress);
-            address underlying = optionToken.getUnderlyingTokenAddress();
-            IERC20Permit(underlying).permit(
-                getCaller(),
-                address(this),
-                uint256(-1),
-                deadline,
-                v,
-                r,
-                s
+        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+        IERC20Permit(underlying).permit(
+            getCaller(),
+            address(this),
+            uint256(-1),
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        return
+            addShortLiquidityWithUnderlying(
+                optionAddress,
+                quantityOptions,
+                amountBMax,
+                amountBMin,
+                to,
+                deadline
             );
-
-            uint256 amt = quantityOptions;
-            // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-            IERC20(underlying).transferFrom(
-                msg.sender,
-                address(optionToken),
-                amt
-            );
-        }
-
-        {
-            // scope for adding exact liquidity, avoids stack too deep errors
-            IOption optionToken = IOption(optionAddress);
-            (, uint256 outputRedeems) = optionToken.mintOptions(address(this));
-            address redeem = optionToken.redeemToken();
-            address underlying = optionToken.getUnderlyingTokenAddress();
-            AddAmounts memory params;
-            params.amountAMax = outputRedeems;
-            params.amountBMax = amountBMax;
-            params.amountAMin = outputRedeems;
-            params.amountBMin = amountBMin;
-            params.deadline = deadline;
-
-            // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(router));
-            checkApproval(underlying, address(router));
-
-            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
-            (amountA, amountB, liquidity) = _addLiquidity(
-                redeem,
-                underlying,
-                params
-            );
-            // check for exact liquidity provided
-            assert(amountA == outputRedeems);
-            // Return remaining tokens
-            _transferToCaller(underlying);
-            _transferToCaller(redeem);
-        }
-
-        emit AddLiquidity(getCaller(), optionAddress, liquidity);
-        return (amountA, amountB, liquidity);
-    } */
+    }
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
