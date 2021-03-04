@@ -69,6 +69,42 @@ interface IPrimitiveLiquidity {
             uint256
         );
 
+    function addShortLiquidityWithUnderlyingWithPermit(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
+
+    function addShortLiquidityWithUnderlyingWithDaiPermit(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
+
     function removeShortLiquidityThenCloseOptions(
         address optionAddress,
         uint256 liquidity,

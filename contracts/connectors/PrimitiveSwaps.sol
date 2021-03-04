@@ -542,7 +542,7 @@ contract PrimitiveSwaps is
         uint256 amount0,
         uint256 amount1,
         bytes calldata data
-    ) external override {
+    ) external override(IPrimitiveSwaps, IUniswapV2Callee) {
         assert(
             _msgSender() ==
                 factory.getPair(
