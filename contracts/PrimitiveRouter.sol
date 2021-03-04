@@ -159,12 +159,9 @@ contract PrimitiveRouter is
     }
 
     function validateOption(address option) external notHalted {
-      IOption _option = IOption(option);
-      require(
-        isRegistered(_option),
-            "EVIL_OPTION"
-          );
-      _validOptions[option] = true;
+        IOption _option = IOption(option);
+        require(isRegistered(_option), "EVIL_OPTION");
+        _validOptions[option] = true;
     }
 
     /**
@@ -201,6 +198,25 @@ contract PrimitiveRouter is
         IERC20(token).safeTransferFrom(
             getCaller(), // Account to pull from
             _msgSender(), // The connector
+            amount
+        );
+        return true;
+    }
+
+    /**
+     * @notice  Transfers ERC20 tokens from the executing `_CALLER` to an arbitrary address.
+     * @param   token The address of the ERC20.
+     * @param   amount The amount of ERC20 to transfer.
+     * @return  Whether or not the transfer succeeded.
+     */
+    function transferFromCallerToReceiver(
+        address token,
+        uint256 amount,
+        address receiver
+    ) public override isExec notHalted returns (bool) {
+        IERC20(token).safeTransferFrom(
+            getCaller(), // Account to pull from
+            receiver,
             amount
         );
         return true;
@@ -263,7 +279,12 @@ contract PrimitiveRouter is
         return _CALLER;
     }
 
-    function validOptions(address option) external view override returns (bool) {
-      return _validOptions[option];
+    function validOptions(address option)
+        external
+        view
+        override
+        returns (bool)
+    {
+        return _validOptions[option];
     }
 }

@@ -51,10 +51,7 @@ abstract contract PrimitiveConnector is Context {
 
     // ===== Constructor =====
 
-    constructor(
-        address weth_,
-        address primitiveRouter_
-    ) public {
+    constructor(address weth_, address primitiveRouter_) public {
         _weth = IWETH(weth_);
         _primitiveRouter = IPrimitiveRouter(primitiveRouter_);
         checkApproval(weth_, primitiveRouter_);
@@ -64,7 +61,10 @@ abstract contract PrimitiveConnector is Context {
      * @notice Reverts if the `option` is not deployed from the Primitive Registry.
      */
     modifier onlyRegistered(IOption option) {
-        require(_primitiveRouter.validOptions(address(option)), "PrimitiveSwaps: EVIL_OPTION");
+        require(
+            _primitiveRouter.validOptions(address(option)),
+            "PrimitiveSwaps: EVIL_OPTION"
+        );
         _;
     }
 
@@ -141,15 +141,42 @@ abstract contract PrimitiveConnector is Context {
         return false;
     }
 
+    /**
+     * @notice  Calls the Router to pull `token` from the getCaller() and send them to this contract.
+     * @dev     This eliminates the need for users to approve the Router and each connector.
+     */
+    function _transferFromCallerToReceiver(
+        address token,
+        uint256 quantity,
+        address receiver
+    ) internal returns (bool) {
+        if (quantity > 0) {
+            _primitiveRouter.transferFromCallerToReceiver(
+                token,
+                quantity,
+                receiver
+            );
+            return true;
+        }
+        return false;
+    }
+
     function _mintOptions(IOption optionToken)
         internal
         returns (uint256, uint256)
     {
         address underlying = optionToken.getUnderlyingTokenAddress();
-        uint256 quantity = IERC20(underlying).balanceOf(address(this));
-        require(quantity > 0, "ERR_ZERO");
-        IERC20(underlying).safeTransfer(address(optionToken), quantity);
+        _transferBalanceToReceiver(underlying, address(optionToken));
         return optionToken.mintOptions(address(this));
+    }
+
+    function _mintOptionsToReceiver(IOption optionToken, address receiver)
+        internal
+        returns (uint256, uint256)
+    {
+        address underlying = optionToken.getUnderlyingTokenAddress();
+        _transferBalanceToReceiver(underlying, address(optionToken));
+        return optionToken.mintOptions(receiver);
     }
 
     function _mintOptionsPermitted(IOption optionToken, uint256 quantity)
@@ -157,23 +184,24 @@ abstract contract PrimitiveConnector is Context {
         returns (uint256, uint256)
     {
         require(quantity > 0, "ERR_ZERO");
-        IERC20(optionToken.getUnderlyingTokenAddress()).transferFrom(
-                getCaller(),
-                address(optionToken),
-                quantity
+        _transferFromCallerToReceiver(
+            optionToken.getUnderlyingTokenAddress(),
+            quantity,
+            address(optionToken)
         );
         return optionToken.mintOptions(address(this));
     }
 
     function _closeOptions(IOption optionToken) internal returns (uint256) {
         address redeem = optionToken.redeemToken();
-        uint256 quantity = IERC20(redeem).balanceOf(address(this));
-        IERC20(redeem).safeTransfer(address(optionToken), quantity);
+        uint256 quantity =
+            _transferBalanceToReceiver(redeem, address(optionToken));
 
         if (optionToken.getExpiryTime() >= now) {
-            IERC20(address(optionToken)).safeTransfer(
+            _transferFromCallerToReceiver(
                 address(optionToken),
-                CoreLib.getProportionalLongOptions(optionToken, quantity)
+                CoreLib.getProportionalLongOptions(optionToken, quantity),
+                address(optionToken)
             );
         }
 
@@ -187,17 +215,24 @@ abstract contract PrimitiveConnector is Context {
         returns (uint256, uint256)
     {
         address strike = optionToken.getStrikeTokenAddress();
-        uint256 quantity = IERC20(strike).balanceOf(address(this));
-        IERC20(strike).safeTransfer(address(optionToken), quantity);
+        _transferBalanceToReceiver(strike, address(optionToken));
         IERC20(address(optionToken)).safeTransfer(address(optionToken), amount);
         return optionToken.exerciseOptions(getCaller(), amount, new bytes(0));
     }
 
     function _redeemOptions(IOption optionToken) internal returns (uint256) {
         address redeem = optionToken.redeemToken();
-        uint256 quantity = IERC20(redeem).balanceOf(address(this));
-        IERC20(redeem).safeTransfer(address(optionToken), quantity);
+        _transferBalanceToReceiver(redeem, address(optionToken));
         return optionToken.redeemStrikeTokens(getCaller());
+    }
+
+    function _transferBalanceToReceiver(address token, address receiver)
+        internal
+        returns (uint256)
+    {
+        uint256 quantity = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransfer(receiver, quantity);
+        return quantity;
     }
 
     // ===== Fallback =====
