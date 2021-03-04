@@ -212,6 +212,7 @@ contract PrimitiveLiquidity is
     )
         external
         override
+        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
@@ -257,6 +258,7 @@ contract PrimitiveLiquidity is
         external
         override
         nonReentrant
+        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
