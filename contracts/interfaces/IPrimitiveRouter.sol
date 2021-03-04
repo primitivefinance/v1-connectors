@@ -31,16 +31,11 @@ import {
 import {IWETH} from "./IWETH.sol";
 
 interface IPrimitiveRouter {
-    function executeCall(address connector, bytes calldata params) external payable;
+    // ===== Admin =====
 
-    function transferFromCaller(address token, uint256 amount) external returns (bool);
+    function halt() external;
 
-    function transferFromCallerToReceiver(
-        address token,
-        uint256 amount,
-        address receiver
-    ) external returns (bool);
-
+    // ===== Registration =====
     function setRegisteredOptions(address[] calldata optionAddresses)
         external
         returns (bool);
@@ -50,17 +45,29 @@ interface IPrimitiveRouter {
         bool[] calldata isValid
     ) external returns (bool);
 
-    function halt() external;
+    // ===== Operations =====
+
+    function transferFromCaller(address token, uint256 amount) external returns (bool);
+
+    function transferFromCallerToReceiver(
+        address token,
+        uint256 amount,
+        address receiver
+    ) external returns (bool);
+
+    // ===== Execution =====
+
+    function executeCall(address connector, bytes calldata params) external payable;
 
     // ==== View ====
 
     function getWeth() external view returns (IWETH);
 
-    function getRegistry() external view returns (IRegistry);
-
     function getRoute() external view returns (address);
 
     function getCaller() external view returns (address);
+
+    function getRegistry() external view returns (IRegistry);
 
     function getRegisteredOption(address option) external view returns (bool);
 

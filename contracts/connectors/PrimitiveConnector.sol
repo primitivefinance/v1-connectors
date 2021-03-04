@@ -151,20 +151,13 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
         address receiver
     ) internal returns (bool) {
         if (quantity > 0) {
-            _primitiveRouter.transferFromCallerToReceiver(
-                token,
-                quantity,
-                receiver
-            );
+            _primitiveRouter.transferFromCallerToReceiver(token, quantity, receiver);
             return true;
         }
         return false;
     }
 
-    function _mintOptions(IOption optionToken)
-        internal
-        returns (uint256, uint256)
-    {
+    function _mintOptions(IOption optionToken) internal returns (uint256, uint256) {
         address underlying = optionToken.getUnderlyingTokenAddress();
         _transferBalanceToReceiver(underlying, address(optionToken));
         return optionToken.mintOptions(address(this));
@@ -194,8 +187,7 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
 
     function _closeOptions(IOption optionToken) internal returns (uint256) {
         address redeem = optionToken.redeemToken();
-        uint256 quantity =
-            _transferBalanceToReceiver(redeem, address(optionToken));
+        uint256 quantity = _transferBalanceToReceiver(redeem, address(optionToken));
 
         if (optionToken.getExpiryTime() >= now) {
             _transferFromCallerToReceiver(
@@ -205,8 +197,7 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
             );
         }
 
-        (, , uint256 outputUnderlyings) =
-            optionToken.closeOptions(address(this));
+        (, , uint256 outputUnderlyings) = optionToken.closeOptions(address(this));
         return outputUnderlyings;
     }
 
@@ -236,11 +227,24 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
     }
 
     // ===== Fallback =====
+
     receive() external payable {
         assert(_msgSender() == address(_weth)); // only accept ETH via fallback from the WETH contract
     }
 
     // ===== View =====
+
+    function getWeth() public view override returns (IWETH) {
+        return _weth;
+    }
+
+    function getCaller() public view override returns (address) {
+        return _primitiveRouter.getCaller();
+    }
+
+    function getPrimitiveRouter() public view override returns (IPrimitiveRouter) {
+        return _primitiveRouter;
+    }
 
     function isApproved(address token, address spender)
         public
@@ -249,22 +253,5 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
         returns (bool)
     {
         return _approved[token][spender];
-    }
-
-    function getWeth() public view override returns (IWETH) {
-        return _weth;
-    }
-
-    function getPrimitiveRouter()
-        public
-        view
-        override
-        returns (IPrimitiveRouter)
-    {
-        return _primitiveRouter;
-    }
-
-    function getCaller() public view override returns (address) {
-        return _primitiveRouter.getCaller();
     }
 }

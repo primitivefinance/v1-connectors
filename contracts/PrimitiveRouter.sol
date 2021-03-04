@@ -259,13 +259,6 @@ contract PrimitiveRouter is IPrimitiveRouter, Ownable, Pausable, ReentrancyGuard
     }
 
     /**
-     * @notice  Returns the Primitive Registry contract address.
-     */
-    function getRegistry() public view override returns (IRegistry) {
-        return _registry;
-    }
-
-    /**
      * @notice  Returns the Route contract which executes functions on behalf of this contract.
      */
     function getRoute() public view override returns (address) {
@@ -277,6 +270,13 @@ contract PrimitiveRouter is IPrimitiveRouter, Ownable, Pausable, ReentrancyGuard
      */
     function getCaller() public view override returns (address) {
         return _CALLER;
+    }
+
+    /**
+     * @notice  Returns the Primitive Registry contract address.
+     */
+    function getRegistry() public view override returns (IRegistry) {
+        return _registry;
     }
 
     /**
