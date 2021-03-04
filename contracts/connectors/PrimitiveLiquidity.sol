@@ -128,7 +128,10 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
-        require(_primitiveRouter.validOptions(optionAddress), "PrimitiveSwaps: EVIL_OPTION");
+        require(
+            _primitiveRouter.validOptions(optionAddress),
+            "PrimitiveSwaps: EVIL_OPTION"
+        );
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;
@@ -138,6 +141,7 @@ contract PrimitiveLiquidity is
         _transferFromCaller(underlying, quantityOptions.add(amountBMax));
         // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
         IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
+        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
         (, uint256 outputRedeems) =
             IOption(optionAddress).mintOptions(address(this));
 
@@ -155,6 +159,7 @@ contract PrimitiveLiquidity is
             // Approves Uniswap V2 Pair pull tokens from this contract.
             checkApproval(redeem, address(router));
             checkApproval(underlying, address(router));
+            console.log("adding liq");
 
             // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
             (amountA, amountB, liquidity) = _addLiquidity(
@@ -162,6 +167,7 @@ contract PrimitiveLiquidity is
                 underlying,
                 params
             );
+            console.log("added liq");
             // check for exact liquidity provided
             assert(amountA == outputRedeems);
             // Return remaining tokens
@@ -421,8 +427,6 @@ contract PrimitiveLiquidity is
                 optionToken,
                 shortTokensWithdrawn
             );
-
-        _transferFromCaller(address(optionToken), long);
 
         uint256 proceeds = _closeOptions(optionToken);
 

@@ -74,10 +74,10 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
 
     // ===== Constructor =====
 
-    constructor(
-        address weth_,
-        address primitiveRouter_
-    ) public PrimitiveConnector(weth_, primitiveRouter_) {
+    constructor(address weth_, address primitiveRouter_)
+        public
+        PrimitiveConnector(weth_, primitiveRouter_)
+    {
         emit Initialized(_msgSender());
     }
 
@@ -95,11 +95,11 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
-        require(msg.value > 0, "ERR_ZERO");
+        require(msg.value > 0, "PrimitiveCore: ERR_ZERO");
         address caller = getCaller();
-        _weth.deposit.value(msg.value)();
-        IERC20(address(_weth)).safeTransfer(address(optionToken), msg.value);
-        (uint256 long, uint256 short) = optionToken.mintOptions(caller);
+        _depositETH();
+        (uint256 long, uint256 short) =
+            _mintOptionsToReceiver(optionToken, caller);
         emit Minted(caller, address(optionToken), long, short);
         return (long, short);
     }
@@ -151,7 +151,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     {
         require(msg.value > 0, "PrimitiveCore: ZERO");
 
-        _weth.deposit.value(msg.value)();
+        _depositETH();
 
         uint256 long =
             CoreLib.getProportionalLongOptions(optionToken, msg.value);
@@ -181,17 +181,23 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         uint256 strikeQuantity =
             CoreLib.getProportionalShortOptions(optionToken, exerciseQuantity);
         // Pull tokens to this contract
-        bool success =
-            _transferFromCaller(address(optionToken), exerciseQuantity);
-        require(success, "PrimitiveCore: ZERO");
-        _transferFromCaller(strike, strikeQuantity);
+        _transferFromCallerToReceiver(
+            address(optionToken),
+            exerciseQuantity,
+            address(optionToken)
+        );
+        _transferFromCallerToReceiver(
+            strike,
+            strikeQuantity,
+            address(optionToken)
+        );
 
         // Push tokens to option contract
-        IERC20(strike).safeTransfer(address(optionToken), strikeQuantity);
-        IERC20(address(optionToken)).safeTransfer(
-            address(optionToken),
-            exerciseQuantity
-        );
+        //IERC20(strike).safeTransfer(address(optionToken), strikeQuantity);
+        //IERC20(address(optionToken)).safeTransfer(
+        //    address(optionToken),
+        //    exerciseQuantity
+        //);
 
         (uint256 strikesPaid, uint256 options) =
             optionToken.exerciseOptions(
@@ -221,14 +227,14 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     {
         // Require the strike token to be Weth.
         address redeem = optionToken.redeemToken();
-        console.log("pulling");
         // Pull redeems
-        _transferFromCaller(redeem, redeemQuantity);
+        _transferFromCallerToReceiver(
+            redeem,
+            redeemQuantity,
+            address(optionToken)
+        );
         // Push redeems to option contract
-        IERC20(redeem).safeTransfer(address(optionToken), redeemQuantity);
-        console.log("calling redeem", redeemQuantity);
         uint256 short = optionToken.redeemStrikeTokens(address(this));
-        console.log("withdrawing");
         _withdrawETH();
         emit Redeemed(getCaller(), address(optionToken), redeemQuantity);
         return short;
@@ -258,17 +264,16 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         uint256 short =
             CoreLib.getProportionalShortOptions(optionToken, closeQuantity);
         // Pull tokens
-        _transferFromCaller(redeem, short);
+        _transferFromCallerToReceiver(redeem, short, address(optionToken));
 
         if (optionToken.getExpiryTime() >= now) {
-            _transferFromCaller(address(optionToken), closeQuantity);
-            // Push tokens to option contract
-            IERC20(address(optionToken)).safeTransfer(
+            // Pull options from caller and push to option contract
+            _transferFromCallerToReceiver(
                 address(optionToken),
-                closeQuantity
+                closeQuantity,
+                address(optionToken)
             );
         }
-        IERC20(redeem).safeTransfer(address(optionToken), short);
         (uint256 inputRedeems, uint256 inputOptions, uint256 outUnderlyings) =
             optionToken.closeOptions(address(this));
 
