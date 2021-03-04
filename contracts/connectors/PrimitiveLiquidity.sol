@@ -212,7 +212,7 @@ contract PrimitiveLiquidity is
         IERC20Permit(underlying).permit(
             getCaller(),
             address(this),
-            uint256(-1),
+            quantityOptions.add(amountBMax),
             deadline,
             v,
             r,

@@ -46,7 +46,8 @@ import {
     IPrimitiveSwaps,
     IUniswapV2Router02,
     IUniswapV2Factory,
-    IOption
+    IOption,
+    IERC20Permit
 } from "../interfaces/IPrimitiveSwaps.sol";
 // Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
@@ -124,17 +125,10 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountOptions,
         uint256 maxPremium
-    )
-        external
-        override
-        nonReentrant
-        onlyRegistered(optionToken)
-        returns (bool)
-    {
+    ) public override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, address underlying, ) =
             getOptionPair(optionToken);
-        console.log("got pair, executing flash swap");
         _flashSwap(
             pair, // Pair to flash swap from
             underlying, // Token to swap to, i.e. receive optimistically
@@ -152,7 +146,47 @@ contract PrimitiveSwaps is
                 maxPremium // total price paid (in underlyingTokens) for selling shortOptionTokens
             ) // Function to execute in the `uniswapV2Callee` callback.
         );
-        console.log("executed");
+        return true;
+    }
+
+    function openFlashLongWithPermit(
+        IOption optionToken,
+        uint256 amountOptions,
+        uint256 maxPremium,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public override nonReentrant onlyRegistered(optionToken) returns (bool) {
+        // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
+        (IUniswapV2Pair pair, address underlying, ) =
+            getOptionPair(optionToken);
+        IERC20Permit(underlying).permit(
+            getCaller(),
+            address(this),
+            maxPremium,
+            deadline,
+            v,
+            r,
+            s
+        );
+        _flashSwap(
+            pair, // Pair to flash swap from
+            underlying, // Token to swap to, i.e. receive optimistically
+            amountOptions, // Amount of underlying to optimistically receive
+            abi.encodeWithSelector(
+                bytes4(
+                    keccak256(
+                        bytes(
+                            "flashMintShortOptionsThenSwap(address,uint256,uint256)"
+                        )
+                    )
+                ), // function to call in this contract
+                optionToken, // option token to mint with flash loaned tokens
+                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
+                maxPremium // total price paid (in underlyingTokens) for selling shortOptionTokens
+            ) // Function to execute in the `uniswapV2Callee` callback.
+        );
         return true;
     }
 
@@ -174,7 +208,6 @@ contract PrimitiveSwaps is
         // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, address underlying, ) =
             getOptionPair(optionToken);
-        console.log("got pair, executing flash swap");
         _flashSwap(
             pair,
             underlying,
@@ -192,7 +225,6 @@ contract PrimitiveSwaps is
                 msg.value // total price paid (in underlyingTokens) for selling shortOptionTokens
             )
         );
-        console.log("executed");
         return true;
     }
 
@@ -278,10 +310,10 @@ contract PrimitiveSwaps is
         return true;
     }
 
-    // ===== Flash Functions =====
+    // ===== Flash Callback Functions =====
 
     /**
-     * @notice  Callback function executed in a UniswapV2Pair.swap() call.
+     * @notice  Callback function executed in a UniswapV2Pair.swap() call for `openFlashLong`.
      * @dev     Pays underlying token `premium` for `quantity` of `optionAddress` tokens.
      * @param   optionAddress The address of the Option contract.
      * @param   quantity The quantity of options to mint using borrowed underlyingTokens.
@@ -292,7 +324,12 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 quantity,
         uint256 maxPremium
-    ) public onlySelf returns (uint256, uint256) {
+    )
+        public
+        onlySelf
+        onlyRegistered(IOption(optionAddress))
+        returns (uint256, uint256)
+    {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
@@ -320,7 +357,7 @@ contract PrimitiveSwaps is
     }
 
     /**
-     * @notice  Callback function executed in a UniswapV2Pair.swap() call.
+     * @notice  Callback function executed in a UniswapV2Pair.swap() call for `openFlashLongWithETH`.
      * @dev     Pays `premium` in ether for `quantity` of `optionAddress` tokens.
      * @param   optionAddress The address of the Option contract.
      * @param   quantity The quantity of options to mint using borrowed underlyingTokens.
@@ -331,7 +368,12 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 quantity,
         uint256 maxPremium
-    ) public onlySelf returns (uint256, uint256) {
+    )
+        public
+        onlySelf
+        onlyRegistered(IOption(optionAddress))
+        returns (uint256, uint256)
+    {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
@@ -374,52 +416,47 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 flashLoanQuantity,
         uint256 minPayout
-    ) public onlySelf returns (uint256, uint256) {
-        console.log("entered close callback");
+    )
+        public
+        onlySelf
+        onlyRegistered(IOption(optionAddress))
+        returns (uint256, uint256)
+    {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
 
-        _transferFromCaller(optionAddress, flashLoanQuantity);
         _closeOptions(optionToken);
 
-        console.log("closed options");
         (uint256 payout, uint256 cost, uint256 outstanding) =
             SwapsLib.repayClose(router, optionToken, flashLoanQuantity);
 
         // Pay back the pair in underlyingTokens.
         if (cost > 0) {
-            console.log("entering cost", cost);
-            console.log(IERC20(underlying).balanceOf(address(this)));
             IERC20(underlying).safeTransfer(address(pair), cost);
         }
 
         // Pay back the outstanding
         if (outstanding > 0) {
-            console.log("entering outstanding", outstanding, minPayout);
             // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
             // Revert if the minPayout is less than or equal to the underlyingPayment of 0.
             // There is 0 underlyingPayment in the case that outstanding > 0.
             // This code branch can be successful by setting `minPayout` to 0.
             // This means the user is willing to pay to close the position.
             require(minPayout <= payout, "PrimitiveSwaps: NEGATIVE_PAYOUT");
-            _transferFromCaller(underlying, outstanding);
-            IERC20(underlying).safeTransfer(address(pair), outstanding);
-            /* IERC20(underlying).safeTransferFrom(
-                getCaller(),
-                address(pair),
-                outstanding
-            ); */
+            _transferFromCallerToReceiver(
+                underlying,
+                outstanding,
+                address(pair)
+            );
         }
 
         // If payout is non-zero and non-negative, send it to the `getCaller()` address.
         if (payout > 0) {
-            console.log("entering payout", payout, minPayout);
             // Revert if minPayout is greater than the actual payout.
             require(payout >= minPayout, "PrimitiveSwaps: MIN_PREMIUM");
             _transferToCaller(underlying);
         }
-        console.log("emitting sell");
         emit Sell(getCaller(), optionAddress, flashLoanQuantity, payout);
         return (payout, cost);
     }
@@ -435,13 +472,17 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 flashLoanQuantity,
         uint256 minPayout
-    ) public onlySelf returns (uint256, uint256) {
+    )
+        public
+        onlySelf
+        onlyRegistered(IOption(optionAddress))
+        returns (uint256, uint256)
+    {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
         require(underlying == address(_weth), "PrimitiveSwaps: NOT_WETH");
 
-        _transferFromCaller(optionAddress, flashLoanQuantity);
         _closeOptions(optionToken);
 
         (uint256 payout, uint256 cost, uint256 outstanding) =
@@ -460,10 +501,10 @@ contract PrimitiveSwaps is
             // This code branch can be successful by setting `minPayout` to 0.
             // This means the user is willing to pay to close the position.
             require(minPayout <= payout, "PrimitiveSwaps: NEGATIVE_PAYOUT");
-            IERC20(underlying).safeTransferFrom(
-                getCaller(),
-                address(pair),
-                outstanding
+            _transferFromCallerToReceiver(
+                underlying,
+                outstanding,
+                address(pair)
             );
         }
 
@@ -489,7 +530,6 @@ contract PrimitiveSwaps is
         // Receives `amount` of `token` to this contract address.
         uint256 amount0Out = pair.token0() == token ? amount : 0;
         uint256 amount1Out = pair.token0() == token ? 0 : amount;
-        console.log("calling pair.swap");
         // Execute the callback function in params.
         pair.swap(amount0Out, amount1Out, address(this), params);
         return true;
@@ -516,7 +556,6 @@ contract PrimitiveSwaps is
                 )
         ); // ensure that _msgSender() is actually a V2 pair
         require(sender == address(this), "PrimitiveSwaps: NOT_SENDER"); // ensure called by this contract
-        console.log("successfully entered callback, calling now");
         (bool success, bytes memory returnData) = address(this).call(data);
         require(
             success &&
@@ -535,7 +574,6 @@ contract PrimitiveSwaps is
     function getOptionPair(IOption option)
         public
         view
-        onlyRegistered(option)
         returns (
             IUniswapV2Pair,
             address,
