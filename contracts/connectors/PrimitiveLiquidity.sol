@@ -519,16 +519,18 @@ contract PrimitiveLiquidity is
             bytes32 r_ = r;
             bytes32 s_ = s;
             (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
+            console.log("permitting");
             pair.permit(
                 getCaller(),
-                address(this),
-                uint256(-1),
+                address(_primitiveRouter),
+                liquidity_,
                 deadline_,
                 v_,
                 r_,
                 s_
             );
         }
+        console.log("calling remove");
         return
             removeShortLiquidityThenCloseOptions(
                 address(optionToken),
