@@ -27,7 +27,6 @@ pragma solidity ^0.6.2;
  * @author  Primitive
  */
 
-// Uniswap
 import {
     IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
@@ -37,12 +36,15 @@ library SwapsLib {
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
     /**
-     * @notice Gets the amounts to pay out, pay back, and outstanding cost.
+     * @notice  Gets the amounts to pay out, pay back, and outstanding cost.
+     * @param   router The UniswapV2Router02 to use for calculating `amountsOut`.
+     * @param   optionToken The option token to use for fetching its corresponding Uniswap Pair.
+     * @param   redeemAmount The quantity of REDEEM tokens, with `quoteValue` units, needed to close the options.
      */
     function repayClose(
         IUniswapV2Router02 router,
         IOption optionToken,
-        uint256 flashLoanQuantity
+        uint256 redeemAmount
     )
         internal
         view
@@ -55,31 +57,37 @@ library SwapsLib {
         // Outstanding is the cost remaining, should be 0 in most cases.
         // Payout is the `premium` that the original caller receives in underlyingTokens.
         (uint256 payout, uint256 outstanding) =
-            getClosePremium(router, optionToken, flashLoanQuantity);
+            getClosePremium(router, optionToken, redeemAmount);
 
-        // In most cases there will be an underlying payout, which is subtracted from the flashLoanQuantity.
+        // In most cases there will be an underlying payout, which is subtracted from the redeemAmount.
         uint256 cost;
         if (payout > 0) {
-            cost = CoreLib
-                .getProportionalLongOptions(optionToken, flashLoanQuantity)
-                .sub(payout);
+            cost = CoreLib.getProportionalLongOptions(optionToken, redeemAmount).sub(
+                payout
+            );
         }
         return (payout, cost, outstanding);
     }
 
     /**
-     * @notice Returns the swap amounts required to return to repay the flash loan.
+     * @notice  Returns the swap amounts required to return to repay the flash loan used to open a long position.
+     * @param   router The UniswapV2Router02 to use for calculating `amountsOut`.
+     * @param   optionToken The option token to use for fetching its corresponding Uniswap Pair.
+     * @param   underlyingAmount The quantity of UNDERLYING tokens, with `baseValue` units, needed to open the options.
      */
     function repayOpen(
         IUniswapV2Router02 router,
         IOption optionToken,
-        uint256 flashLoanQuantity
+        uint256 underlyingAmount
     ) internal view returns (uint256, uint256) {
+        // Premium is the `underlyingTokens` required to buy the `optionToken`.
+        // ExtraRedeems is the `redeemTokens` that are remaining.
+        // If `premium` is not 0, `extraRedeems` should be 0, else `extraRedeems` is the payout (a negative premium).
         (uint256 premium, uint256 extraRedeems) =
-            getOpenPremium(router, optionToken, flashLoanQuantity);
+            getOpenPremium(router, optionToken, underlyingAmount);
 
         uint256 redeemPremium =
-            CoreLib.getProportionalShortOptions(optionToken, flashLoanQuantity);
+            CoreLib.getProportionalShortOptions(optionToken, underlyingAmount);
 
         if (extraRedeems > 0) {
             redeemPremium = redeemPremium.sub(extraRedeems);
@@ -88,7 +96,7 @@ library SwapsLib {
     }
 
     /**
-     * @dev    Calculates the effective premium, denominated in underlyingTokens, to "buy" `quantity` of optionTokens.
+     * @dev    Calculates the effective premium, denominated in underlyingTokens, to buy `quantity` of `optionToken`s.
      * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
      *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
      *         Buying negative premium options will pay out redeemTokens.
@@ -134,8 +142,6 @@ library SwapsLib {
         // Negative premium amount is the opposite difference of the loan remainder: (paid - flash loan amount)
         uint256 negativePremiumPaymentInRedeems;
 
-        // Need to return tokens from the flash swap by returning shortOptionTokens and any remainder of underlyingTokens.
-
         // Since the borrowed amount is underlyingTokens, and we are paying back in redeemTokens,
         // we need to see how much redeemTokens must be returned for the borrowed amount.
         // We can find that value by doing the normal swap math, getAmountsIn will give us the amount
@@ -143,13 +149,10 @@ library SwapsLib {
         // IMPORTANT: amountsIn[0] is how many short tokens we need to pay back.
         // This value is most likely greater than the amount of redeemTokens minted.
         uint256[] memory amountsIn = router.getAmountsIn(quantity, path);
-
         uint256 redeemsRequired = amountsIn[0]; // the amountIn of redeemTokens based on the amountOut of `quantity`.
         // If redeemsMinted is greater than redeems required, there is a cost of 0, implying a negative premium.
         uint256 redeemCostRemaining =
-            redeemsRequired > redeemsMinted
-                ? redeemsRequired.sub(redeemsMinted)
-                : 0;
+            redeemsRequired > redeemsMinted ? redeemsRequired.sub(redeemsMinted) : 0;
         // If there is a negative premium, calculate the quantity of remaining redeemTokens after the `redeemsMinted` is spent.
         negativePremiumPaymentInRedeems = redeemsMinted > redeemsRequired
             ? redeemsMinted.sub(redeemsRequired)
@@ -167,8 +170,7 @@ library SwapsLib {
             // The input redeemTokens is the remaining redeemToken cost, and the output
             // underlyingTokens is the proportional amount of underlyingTokens.
             // amountsOut[1] is then the outstanding flash loan value denominated in underlyingTokens.
-            uint256[] memory amountsOut =
-                router.getAmountsOut(redeemCostRemaining, path);
+            uint256[] memory amountsOut = router.getAmountsOut(redeemCostRemaining, path);
 
             // Returning withdrawn tokens to the pair has a fee of .003 / .997 = 0.3009027% which must be applied.
             loanRemainderInUnderlyings = (
@@ -180,7 +182,7 @@ library SwapsLib {
     }
 
     /**
-     * @dev    Calculates the effective premium, denominated in underlyingTokens, to "sell" option tokens.
+     * @dev    Calculates the effective premium, denominated in underlyingTokens, to sell `optionToken`s.
      * @param  router The UniswapV2Router02 contract.
      * @param  optionToken The optionToken to get the premium cost of purchasing.
      * @param  quantity The quantity of short option tokens that will be closed.
@@ -217,8 +219,6 @@ library SwapsLib {
         // rebalancing the pool.
         uint256 underlyingPayout;
 
-        // Need to return tokens from the flash swap by returning underlyingTokens.
-
         // Since the borrowed amount is redeemTokens, and we are paying back in underlyingTokens,
         // we need to see how much underlyingTokens must be returned for the borrowed amount.
         // We can find that value by doing the normal swap math, getAmountsIn will give us the amount
@@ -246,7 +246,6 @@ library SwapsLib {
         if (underlyingCostRemaining > 0) {
             loanRemainder = underlyingCostRemaining;
         }
-
         return (underlyingPayout, loanRemainder);
     }
 }
