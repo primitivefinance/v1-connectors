@@ -531,7 +531,6 @@ contract PrimitiveLiquidity is
         public
         view
         override
-        onlyRegistered(option)
         returns (
             IUniswapV2Pair,
             address,
