@@ -1,5 +1,5 @@
 import chai, { assert, expect } from 'chai'
-import { solidity } from 'ethereum-waffle'
+import { solidity, MockProvider } from 'ethereum-waffle'
 chai.use(solidity)
 import * as utils from './lib/utils'
 import * as setup from './lib/setup'
@@ -8,7 +8,7 @@ import { parseEther, formatEther } from 'ethers/lib/utils'
 import UniswapV2Pair from '@uniswap/v2-core/build/UniswapV2Pair.json'
 import batchApproval from './lib/batchApproval'
 import { sortTokens } from './lib/utils'
-import { BigNumber, Contract } from 'ethers'
+import { BigNumber, Contract, Wallet } from 'ethers'
 import { ethers, waffle } from 'hardhat'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 const { assertBNEqual, assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
@@ -17,6 +17,7 @@ const { FAIL } = constants.ERR_CODES
 import { deploy, deployTokens, deployWeth, tokenFromAddress } from './lib/erc20'
 //import { Done } from '@material-ui/icons'
 const { AddressZero } = ethers.constants
+import { ecsign } from 'ethereumjs-util'
 
 const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
   let amountA, amountB
@@ -136,6 +137,7 @@ describe('PrimitiveLiquidity', function () {
   let uniswapFactory: Contract, uniswapRouter: Contract, primitiveRouter
   let premium, assertInvariant, reserves, reserve0, reserve1
   let connector, tokens, signers
+  let wallet: Wallet
   // regular deadline
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
@@ -454,6 +456,137 @@ describe('PrimitiveLiquidity', function () {
           deadline
         )
       ).to.be.revertedWith('UniswapV2Router: INSUFFICIENT_A_AMOUNT') */
+    })
+  })
+
+  describe('addShortLiquidityWithUnderlyingWithPermit()', function () {
+    before(async function () {
+      const chainId = await Admin.getChainId()
+      console.log(chainId)
+      const provider = new MockProvider({
+        ganacheOptions: {
+          gasLimit: 10000000,
+          network_id: +chainId,
+        },
+      })
+      ;[wallet] = provider.getWallets()
+      // Administrative contract instances
+      registry = await setup.newRegistry(Admin)
+      // Option and redeem instances
+      Primitive = await setup.newPrimitive(Admin, registry, underlyingToken, strikeToken, base, quote, expiry)
+      optionToken = Primitive.optionToken
+      redeemToken = Primitive.redeemToken
+
+      primitiveRouter = await deploy('PrimitiveRouter', { from: Admin, args: [weth.address, registry.address] })
+      connector = await deploy('PrimitiveLiquidity', {
+        from: Admin,
+        args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
+      })
+      await primitiveRouter.init(connector.address, connector.address, connector.address)
+      await primitiveRouter.validateOption(optionToken.address)
+
+      // Approve all tokens and contracts
+      await batchApproval(
+        [trader.address, primitiveRouter.address, uniswapRouter.address],
+        [underlyingToken, strikeToken, optionToken, redeemToken, teth, weth, dai],
+        [Admin]
+      )
+
+      premium = 10
+
+      // Create UNISWAP PAIRS
+      const ratio = 1050
+      const totalOptions = parseEther('20')
+      const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
+      await trader.safeMint(optionToken.address, totalOptions.add(parseEther('10')), Alice)
+
+      // Add liquidity to redeem <> teth pair
+      await uniswapRouter.addLiquidity(
+        redeemToken.address,
+        teth.address,
+        totalRedeemForPair,
+        totalOptions,
+        0,
+        0,
+        Alice,
+        deadline
+      )
+    })
+
+    it('use permitted underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
+      let underlyingBalanceBefore = await underlyingToken.balanceOf(wallet.address)
+      let redeemBalanceBefore = await redeemToken.balanceOf(wallet.address)
+      let optionBalanceBefore = await optionToken.balanceOf(wallet.address)
+
+      let optionAddress = optionToken.address
+      let amountOptions = parseEther('0.1')
+      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
+      let amountBMin = 0
+      let to = wallet.address
+
+      let path = [redeemToken.address, underlyingToken.address]
+
+      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      reserves = [reserveA, reserveB]
+
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
+      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
+      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
+
+      ;[, amountBMin] = await _addLiquidity(
+        uniswapRouter,
+        reserves,
+        amountADesired,
+        amountBDesired,
+        amountAOptimal,
+        amountBOptimal
+      )
+
+      console.log('getting sig')
+      const nonce = await underlyingToken.nonces(wallet.address)
+      const digest = await utils.getApprovalDigest(
+        underlyingToken,
+        { owner: wallet.address, spender: primitiveRouter.address, value: amountOptions.add(amountBDesired) },
+        nonce,
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let params = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithPermit', [
+        optionAddress,
+        amountOptions,
+        amountBDesired,
+        amountBMin,
+        to,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+      console.log('executing addliq with permit', params, connector.interface)
+      await underlyingToken.connect(wallet).approve(primitiveRouter.address, ethers.constants.MaxUint256)
+      let tx = await primitiveRouter.connect(wallet).executeCall(connector.address, params)
+      console.log(tx)
+      /*  await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params))
+        .to.emit(connector, 'AddLiquidity')
+        .to.emit(primitiveRouter, 'Executed') */
+
+      console.log('exectued')
+      let underlyingBalanceAfter = await underlyingToken.balanceOf(wallet.address)
+      let redeemBalanceAfter = await redeemToken.balanceOf(wallet.address)
+      let optionBalanceAfter = await optionToken.balanceOf(wallet.address)
+
+      // Used underlyings to mint options (wallet.address)
+      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore)
+      // Sold options for quoteTokens to the pair, pair has more options (Pair)
+      let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
+      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
+
+      const expectedUnderlyingChange = amountOptions.mul(quote).div(base).mul(reserveB).div(reserveA).add(amountOptions)
+
+      assertBNEqual(optionChange.toString(), amountOptions) // kept options
+      assertBNEqual(redeemChange.toString(), '0') // kept options
+      assertBNEqual(underlyingChange, expectedUnderlyingChange.mul(-1))
     })
   })
 

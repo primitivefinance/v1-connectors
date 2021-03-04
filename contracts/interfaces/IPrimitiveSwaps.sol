@@ -41,6 +41,16 @@ interface IPrimitiveSwaps {
         uint256 maxPremium
     ) external returns (bool);
 
+    function openFlashLongWithPermit(
+        IOption optionToken,
+        uint256 amountOptions,
+        uint256 maxPremium,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (bool);
+
     function openFlashLongWithETH(IOption optionToken, uint256 amountOptions)
         external
         payable

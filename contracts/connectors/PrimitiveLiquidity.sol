@@ -51,6 +51,19 @@ import {CoreLib} from "../libraries/CoreLib.sol";
 
 import "hardhat/console.sol";
 
+interface DaiPermit {
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 contract PrimitiveLiquidity is
     PrimitiveConnector,
     IPrimitiveLiquidity,
@@ -145,6 +158,8 @@ contract PrimitiveLiquidity is
         (, uint256 outputRedeems) =
             IOption(optionAddress).mintOptions(address(this));
 
+        console.log("minted options");
+
         {
             // scope for adding exact liquidity, avoids stack too deep errors
             IOption optionToken = IOption(optionAddress);
@@ -209,16 +224,21 @@ contract PrimitiveLiquidity is
         )
     {
         address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+        uint256 sum;
+        {
+            sum = quantityOptions.add(amountBMax);
+        }
+        console.log("calling permit");
         IERC20Permit(underlying).permit(
             getCaller(),
-            address(this),
-            quantityOptions.add(amountBMax),
+            address(_primitiveRouter),
+            sum,
             deadline,
             v,
             r,
             s
         );
-
+        console.log("permitted");
         return
             addShortLiquidityWithUnderlying(
                 optionAddress,
@@ -249,7 +269,7 @@ contract PrimitiveLiquidity is
         )
     {
         address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-        IERC20Permit(underlying).permit(
+        DaiPermit(underlying).permit(
             getCaller(),
             address(this),
             IERC20Permit(underlying).nonces(getCaller()),
