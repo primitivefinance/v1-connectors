@@ -163,7 +163,7 @@ contract PrimitiveSwaps is
             getOptionPair(optionToken);
         IERC20Permit(underlying).permit(
             getCaller(),
-            address(this),
+            address(_primitiveRouter),
             maxPremium,
             deadline,
             v,
