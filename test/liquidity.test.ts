@@ -461,14 +461,7 @@ describe('PrimitiveLiquidity', function () {
 
   describe('addShortLiquidityWithUnderlyingWithPermit()', function () {
     before(async function () {
-      const chainId = await Admin.getChainId()
-      console.log(chainId)
-      const provider = new MockProvider({
-        ganacheOptions: {
-          gasLimit: 10000000,
-          network_id: +chainId,
-        },
-      })
+      const provider = waffle.provider
       ;[wallet] = provider.getWallets()
       // Administrative contract instances
       registry = await setup.newRegistry(Admin)
@@ -542,7 +535,6 @@ describe('PrimitiveLiquidity', function () {
         amountBOptimal
       )
 
-      console.log('getting sig')
       const nonce = await underlyingToken.nonces(wallet.address)
       const digest = await utils.getApprovalDigest(
         underlyingToken,
@@ -563,15 +555,10 @@ describe('PrimitiveLiquidity', function () {
         r,
         s,
       ])
-      console.log('executing addliq with permit', params, connector.interface)
-      await underlyingToken.connect(wallet).approve(primitiveRouter.address, ethers.constants.MaxUint256)
-      let tx = await primitiveRouter.connect(wallet).executeCall(connector.address, params)
-      console.log(tx)
-      /*  await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params))
+      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params))
         .to.emit(connector, 'AddLiquidity')
-        .to.emit(primitiveRouter, 'Executed') */
+        .to.emit(primitiveRouter, 'Executed')
 
-      console.log('exectued')
       let underlyingBalanceAfter = await underlyingToken.balanceOf(wallet.address)
       let redeemBalanceAfter = await redeemToken.balanceOf(wallet.address)
       let optionBalanceAfter = await optionToken.balanceOf(wallet.address)
