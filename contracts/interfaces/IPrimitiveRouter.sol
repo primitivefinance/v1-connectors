@@ -31,6 +31,10 @@ import {
     IOption,
     IERC20
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
+import {
+    IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
+import {IWETH} from "./IWETH.sol";
 
 interface IPrimitiveRouter {
     function executeCall(address connector, bytes calldata params)
@@ -47,21 +51,38 @@ interface IPrimitiveRouter {
         address receiver
     ) external returns (bool);
 
-    function validateOption(address option) external returns (bool);
-
-    function init(
-        address core,
-        address liquidity,
-        address swaps
+    function setRegisteredOptions(
+        address[] calldata optionAddresses,
+        bool[] calldata isValid
     ) external returns (bool);
 
+    function setRegisteredConnectors(
+        address[] calldata connectors,
+        bool[] calldata isValid
+    ) external returns (bool);
+
+    function init(address[] calldata connectors, bool[] calldata isValid)
+        external
+        returns (bool);
+
+    function halt() external;
+
     // ==== View ====
+
+    function getWeth() external view returns (IWETH);
+
+    function getRegistry() external view returns (IRegistry);
 
     function getRoute() external view returns (address);
 
     function getCaller() external view returns (address);
 
-    function validOptions(address option) external view returns (bool);
+    function getRegisteredOption(address option) external view returns (bool);
+
+    function getRegisteredConnector(address connector)
+        external
+        view
+        returns (bool);
 
     function apiVersion() external pure returns (string memory);
 }

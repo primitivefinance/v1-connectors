@@ -61,7 +61,7 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
      */
     modifier onlyRegistered(IOption option) {
         require(
-            _primitiveRouter.validOptions(address(option)),
+            _primitiveRouter.getRegisteredOption(address(option)),
             "PrimitiveSwaps: EVIL_OPTION"
         );
         _;
