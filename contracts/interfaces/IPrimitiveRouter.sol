@@ -47,7 +47,17 @@ interface IPrimitiveRouter {
         address receiver
     ) external returns (bool);
 
+    function validateOption(address option) external returns (bool);
+
+    function init(
+        address core,
+        address liquidity,
+        address swaps
+    ) external returns (bool);
+
     // ==== View ====
+
+    function getRoute() external view returns (address);
 
     function getCaller() external view returns (address);
 

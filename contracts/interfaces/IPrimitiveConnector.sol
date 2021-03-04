@@ -21,44 +21,22 @@
 
 pragma solidity ^0.6.2;
 
-import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
-import {IERC20Permit} from "./IERC20Permit.sol";
+import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
+import {IWETH} from "../interfaces/IWETH.sol";
 
-interface IPrimitiveCore {
-    function safeMintWithETH(IOption optionToken)
+interface IPrimitiveConnector {
+    function checkApproval(address token, address spender)
         external
-        payable
-        returns (uint256, uint256);
+        returns (bool);
 
-    function safeMintWithPermit(
-        IOption optionToken,
-        uint256 amount,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256, uint256);
-
-    function safeExerciseWithETH(IOption optionToken)
+    function isApproved(address token, address spender)
         external
-        payable
-        returns (uint256, uint256);
+        view
+        returns (bool);
 
-    function safeExerciseForETH(IOption optionToken, uint256 exerciseQuantity)
-        external
-        returns (uint256, uint256);
+    function getWeth() external view returns (IWETH);
 
-    function safeRedeemForETH(IOption optionToken, uint256 redeemQuantity)
-        external
-        returns (uint256);
+    function getPrimitiveRouter() external view returns (IPrimitiveRouter);
 
-    function safeCloseForETH(IOption optionToken, uint256 closeQuantity)
-        external
-        returns (
-            uint256,
-            uint256,
-            uint256
-        );
+    function getCaller() external view returns (address);
 }

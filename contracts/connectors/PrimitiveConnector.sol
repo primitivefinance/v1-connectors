@@ -32,17 +32,16 @@ import {Context} from "@openzeppelin/contracts/GSN/Context.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 // Primitive
-import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
+import {CoreLib, IOption} from "../libraries/CoreLib.sol";
 import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
-// WETH Interface
-import {IWETH} from "../interfaces/IWETH.sol";
-import {CoreLib} from "../libraries/CoreLib.sol";
+    IPrimitiveConnector,
+    IPrimitiveRouter,
+    IWETH
+} from "../interfaces/IPrimitiveConnector.sol";
 
 import "hardhat/console.sol";
 
-abstract contract PrimitiveConnector is Context {
+abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
 
     IWETH internal _weth;
@@ -76,6 +75,7 @@ abstract contract PrimitiveConnector is Context {
      */
     function checkApproval(address token, address spender)
         public
+        override
         returns (bool)
     {
         if (!_approved[token][spender]) {
@@ -242,15 +242,29 @@ abstract contract PrimitiveConnector is Context {
 
     // ===== View =====
 
-    function getWeth() public view returns (IWETH) {
+    function isApproved(address token, address spender)
+        public
+        view
+        override
+        returns (bool)
+    {
+        return _approved[token][spender];
+    }
+
+    function getWeth() public view override returns (IWETH) {
         return _weth;
     }
 
-    function getPrimitiveRouter() public view returns (IPrimitiveRouter) {
+    function getPrimitiveRouter()
+        public
+        view
+        override
+        returns (IPrimitiveRouter)
+    {
         return _primitiveRouter;
     }
 
-    function getCaller() public view returns (address) {
+    function getCaller() public view override returns (address) {
         return _primitiveRouter.getCaller();
     }
 }

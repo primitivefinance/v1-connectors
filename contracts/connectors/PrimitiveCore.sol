@@ -29,21 +29,18 @@ pragma solidity ^0.6.2;
 
 // Open Zeppelin
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
     ReentrancyGuard
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Primitive
-import {CoreLib} from "../libraries/CoreLib.sol";
+import {CoreLib, SafeMath} from "../libraries/CoreLib.sol";
 import {
     IPrimitiveCore,
-    IOption,
-    IERC20Permit
+    IERC20Permit,
+    IOption
 } from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
-
-import "hardhat/console.sol";
 
 contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
@@ -92,6 +89,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         external
         payable
         override
+        nonReentrant
         onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
@@ -117,8 +115,13 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external onlyRegistered(optionToken) returns (uint256, uint256) {
-        console.log("in fn");
+    )
+        external
+        override
+        nonReentrant
+        onlyRegistered(optionToken)
+        returns (uint256, uint256)
+    {
         // Permit minting using the caller's underlying tokens
         IERC20Permit(optionToken.getUnderlyingTokenAddress()).permit(
             getCaller(),
@@ -147,6 +150,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         public
         payable
         override
+        nonReentrant
         onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
@@ -173,6 +177,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeExerciseForETH(IOption optionToken, uint256 exerciseQuantity)
         public
         override
+        nonReentrant
         onlyRegistered(optionToken)
         returns (uint256, uint256)
     {
@@ -192,13 +197,6 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
             strikeQuantity,
             address(optionToken)
         );
-
-        // Push tokens to option contract
-        //IERC20(strike).safeTransfer(address(optionToken), strikeQuantity);
-        //IERC20(address(optionToken)).safeTransfer(
-        //    address(optionToken),
-        //    exerciseQuantity
-        //);
 
         (uint256 strikesPaid, uint256 options) =
             optionToken.exerciseOptions(
@@ -223,6 +221,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeRedeemForETH(IOption optionToken, uint256 redeemQuantity)
         public
         override
+        nonReentrant
         onlyRegistered(optionToken)
         returns (uint256)
     {
@@ -253,6 +252,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     function safeCloseForETH(IOption optionToken, uint256 closeQuantity)
         public
         override
+        nonReentrant
         onlyRegistered(optionToken)
         returns (
             uint256,

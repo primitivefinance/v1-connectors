@@ -23,7 +23,7 @@ pragma solidity ^0.6.2;
 
 /**
  * @title   The execution entry point for using Primitive Connector contracts.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v1.3.0
+ * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
  * @author  Primitive
  */
 
@@ -34,15 +34,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
     ReentrancyGuard
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-// WETH Interface
 import {IWETH} from "./interfaces/IWETH.sol";
-// Uniswap V2 & Primitive V1
 import {
-    IUniswapV2Callee
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol";
-import {
-    IUniswapV2Pair
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+    IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
 import {
     IPrimitiveRouter,
     IUniswapV2Router02,
@@ -50,11 +45,6 @@ import {
     IOption,
     IERC20
 } from "./interfaces/IPrimitiveRouter.sol";
-import {
-    IRegistry
-} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
-
-import "hardhat/console.sol";
 
 contract Route {
     function executeCall(address target, bytes calldata params)
@@ -67,12 +57,7 @@ contract Route {
     }
 }
 
-contract PrimitiveRouter is
-    IPrimitiveRouter,
-    IUniswapV2Callee,
-    ReentrancyGuard,
-    Context
-{
+contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
@@ -145,12 +130,13 @@ contract PrimitiveRouter is
         address core,
         address liquidity,
         address swaps
-    ) external notHalted {
+    ) external override notHalted nonReentrant returns (bool) {
         require(initialized == false, "ALREADY_INITIALIZED");
         initialized = true;
         validConnectors[core] = true;
         validConnectors[liquidity] = true;
         validConnectors[swaps] = true;
+        return true;
     }
 
     function halt() external {
@@ -158,10 +144,16 @@ contract PrimitiveRouter is
         _halt = true;
     }
 
-    function validateOption(address option) external notHalted {
+    function validateOption(address option)
+        external
+        override
+        notHalted
+        returns (bool)
+    {
         IOption _option = IOption(option);
         require(isRegistered(_option), "EVIL_OPTION");
         _validOptions[option] = true;
+        return true;
     }
 
     /**
@@ -237,36 +229,6 @@ contract PrimitiveRouter is
         emit Executed(_msgSender(), connector, params);
     }
 
-    // ===== Callback Implementation =====
-
-    /**
-     * @dev     The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
-     * @param   sender The original _msgSender() of the UniswapV2Pair.swap() call.
-     * @param   amount0 The quantity of token0 received to the `to` address in the swap() call.
-     * @param   amount1 The quantity of token1 received to the `to` address in the swap() call.
-     * @param   data The payload passed in the `data` parameter of the swap() call.
-     */
-    function uniswapV2Call(
-        address sender,
-        uint256 amount0,
-        uint256 amount1,
-        bytes calldata data
-    ) external override notHalted {
-        assert(
-            _msgSender() ==
-                factory.getPair(
-                    IUniswapV2Pair(_msgSender()).token0(),
-                    IUniswapV2Pair(_msgSender()).token1()
-                )
-        ); /// ensure that _msgSender() is actually a V2 pair
-        (bool success, bytes memory returnData) = address(this).call(data);
-        require(
-            success &&
-                (returnData.length == 0 || abi.decode(returnData, (bool))),
-            "UNI"
-        );
-    }
-
     // ===== Fallback =====
 
     receive() external payable notHalted {
@@ -274,6 +236,10 @@ contract PrimitiveRouter is
     }
 
     // ===== Execution Context =====
+
+    function getRoute() public view override returns (address) {
+        return address(_route);
+    }
 
     function getCaller() public view override returns (address) {
         return _CALLER;

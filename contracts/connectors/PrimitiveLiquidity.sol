@@ -29,7 +29,6 @@ pragma solidity ^0.6.2;
 
 // Open Zeppelin
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
     ReentrancyGuard
@@ -41,15 +40,13 @@ import {
     IUniswapV2Router02,
     IUniswapV2Factory,
     IUniswapV2Pair,
-    IOption,
-    IERC20Permit
+    IERC20Permit,
+    IOption
 } from "../interfaces/IPrimitiveLiquidity.sol";
 
 // Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
-import {CoreLib} from "../libraries/CoreLib.sol";
-
-import "hardhat/console.sol";
+import {CoreLib, SafeMath} from "../libraries/CoreLib.sol";
 
 interface DaiPermit {
     function permit(
@@ -135,30 +132,29 @@ contract PrimitiveLiquidity is
     )
         public
         override
+        nonReentrant
+        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
             uint256
         )
     {
-        require(
-            _primitiveRouter.validOptions(optionAddress),
-            "PrimitiveSwaps: EVIL_OPTION"
-        );
         uint256 amountA;
         uint256 amountB;
         uint256 liquidity;
         address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
         // Pulls SUM = quantityOptions + amountBMax of underlyingTokens from _msgSender() to this contract.
         // Warning: calls into _msgSender() using `safeTransferFrom`. _msgSender() is not trusted.
-        _transferFromCaller(underlying, quantityOptions.add(amountBMax));
-        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-        IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
+        {
+            uint256 sum = quantityOptions.add(amountBMax);
+            _transferFromCaller(underlying, sum);
+            // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
+            IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
+        }
         // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
         (, uint256 outputRedeems) =
             IOption(optionAddress).mintOptions(address(this));
-
-        console.log("minted options");
 
         {
             // scope for adding exact liquidity, avoids stack too deep errors
@@ -174,7 +170,6 @@ contract PrimitiveLiquidity is
             // Approves Uniswap V2 Pair pull tokens from this contract.
             checkApproval(redeem, address(router));
             checkApproval(underlying, address(router));
-            console.log("adding liq");
 
             // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
             (amountA, amountB, liquidity) = _addLiquidity(
@@ -182,7 +177,6 @@ contract PrimitiveLiquidity is
                 underlying,
                 params
             );
-            console.log("added liq");
             // check for exact liquidity provided
             assert(amountA == outputRedeems);
             // Return remaining tokens
@@ -217,6 +211,7 @@ contract PrimitiveLiquidity is
         bytes32 s
     )
         external
+        override
         returns (
             uint256,
             uint256,
@@ -228,7 +223,6 @@ contract PrimitiveLiquidity is
         {
             sum = quantityOptions.add(amountBMax);
         }
-        console.log("calling permit");
         IERC20Permit(underlying).permit(
             getCaller(),
             address(_primitiveRouter),
@@ -238,7 +232,6 @@ contract PrimitiveLiquidity is
             r,
             s
         );
-        console.log("permitted");
         return
             addShortLiquidityWithUnderlying(
                 optionAddress,
@@ -262,6 +255,8 @@ contract PrimitiveLiquidity is
         bytes32 s
     )
         external
+        override
+        nonReentrant
         returns (
             uint256,
             uint256,
@@ -313,6 +308,7 @@ contract PrimitiveLiquidity is
         public
         payable
         override
+        nonReentrant
         onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
@@ -519,7 +515,6 @@ contract PrimitiveLiquidity is
             bytes32 r_ = r;
             bytes32 s_ = s;
             (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
-            console.log("permitting");
             pair.permit(
                 getCaller(),
                 address(_primitiveRouter),
@@ -530,7 +525,6 @@ contract PrimitiveLiquidity is
                 s_
             );
         }
-        console.log("calling remove");
         return
             removeShortLiquidityThenCloseOptions(
                 address(optionToken),

@@ -23,37 +23,31 @@ pragma solidity ^0.6.2;
 
 /**
  * @title   A user-friendly smart contract to interface with the Primitive and Uniswap protocols.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v1.3.0
+ * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
  * @author  Primitive
  */
 
 // Open Zeppelin
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
     ReentrancyGuard
 } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-// Interfaces
 import {
     IUniswapV2Callee
 } from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol";
-import {
-    IUniswapV2Pair
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+
 import {
     IPrimitiveSwaps,
     IUniswapV2Router02,
     IUniswapV2Factory,
+    IUniswapV2Pair,
     IOption,
     IERC20Permit
 } from "../interfaces/IPrimitiveSwaps.sol";
-// Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
-import {SwapsLib} from "../libraries/SwapsLib.sol";
-
-import "hardhat/console.sol";
+import {SwapsLib, SafeMath} from "../libraries/SwapsLib.sol";
 
 contract PrimitiveSwaps is
     PrimitiveConnector,
@@ -201,6 +195,7 @@ contract PrimitiveSwaps is
         external
         payable
         override
+        nonReentrant
         onlyRegistered(optionToken)
         returns (bool)
     {
@@ -547,7 +542,7 @@ contract PrimitiveSwaps is
         uint256 amount0,
         uint256 amount1,
         bytes calldata data
-    ) external override {
+    ) external override(IPrimitiveSwaps, IUniswapV2Callee) {
         assert(
             _msgSender() ==
                 factory.getPair(
@@ -574,6 +569,7 @@ contract PrimitiveSwaps is
     function getOptionPair(IOption option)
         public
         view
+        override
         returns (
             IUniswapV2Pair,
             address,
@@ -598,6 +594,7 @@ contract PrimitiveSwaps is
     function getOpenPremium(IOption optionToken, uint256 quantity)
         public
         view
+        override
         returns (uint256)
     {
         (uint256 premium, ) =
@@ -608,6 +605,7 @@ contract PrimitiveSwaps is
     function getClosePremium(IOption optionToken, uint256 quantity)
         public
         view
+        override
         returns (uint256)
     {
         (uint256 payout, ) =
