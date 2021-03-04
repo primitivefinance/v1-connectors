@@ -62,4 +62,6 @@ interface IPrimitiveRouter {
     function getCaller() external view returns (address);
 
     function validOptions(address option) external view returns (bool);
+
+    function apiVersion() external pure returns (string memory);
 }

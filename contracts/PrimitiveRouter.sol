@@ -22,7 +22,7 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   The execution entry point for using Primitive Connector contracts.
+ * @title   Contract to execute Primitive Connector functions.
  * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
  * @author  Primitive
  */
@@ -252,5 +252,9 @@ contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
         returns (bool)
     {
         return _validOptions[option];
+    }
+
+    function apiVersion() public pure override returns (string memory) {
+        return "2.0.0";
     }
 }
