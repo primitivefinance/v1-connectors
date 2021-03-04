@@ -130,12 +130,13 @@ contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
         address core,
         address liquidity,
         address swaps
-    ) external notHalted {
+    ) external override notHalted nonReentrant returns (bool) {
         require(initialized == false, "ALREADY_INITIALIZED");
         initialized = true;
         validConnectors[core] = true;
         validConnectors[liquidity] = true;
         validConnectors[swaps] = true;
+        return true;
     }
 
     function halt() external {
