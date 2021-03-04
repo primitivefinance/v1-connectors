@@ -32,14 +32,12 @@ import {Context} from "@openzeppelin/contracts/GSN/Context.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 // Primitive
-import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
+import {CoreLib, IOption} from "../libraries/CoreLib.sol";
 import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
-// WETH Interface
-import {IWETH} from "../interfaces/IWETH.sol";
-import {CoreLib} from "../libraries/CoreLib.sol";
-import {IPrimitiveConnector} from "../interfaces/IPrimitiveConnector.sol";
+    IPrimitiveConnector,
+    IPrimitiveRouter,
+    IWETH
+} from "../interfaces/IPrimitiveConnector.sol";
 
 import "hardhat/console.sol";
 

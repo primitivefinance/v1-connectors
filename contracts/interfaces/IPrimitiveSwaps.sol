@@ -28,6 +28,9 @@ import {
     IUniswapV2Factory
 } from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import {
+    IUniswapV2Pair
+} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+import {
     IOption
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 import {IERC20Permit} from "./IERC20Permit.sol";
@@ -68,7 +71,33 @@ interface IPrimitiveSwaps {
         uint256 minPayout
     ) external returns (bool);
 
+    function uniswapV2Call(
+        address sender,
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata data
+    ) external;
+
     // ==== View ====
+
+    function getOptionPair(IOption option)
+        external
+        view
+        returns (
+            IUniswapV2Pair,
+            address,
+            address
+        );
+
+    function getOpenPremium(IOption optionToken, uint256 quantity)
+        external
+        view
+        returns (uint256);
+
+    function getClosePremium(IOption optionToken, uint256 quantity)
+        external
+        view
+        returns (uint256);
 
     function getRouter() external view returns (IUniswapV2Router02);
 

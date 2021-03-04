@@ -32,7 +32,7 @@ describe('Router', function () {
   let Primitive: any
   let optionToken: Contract, redeemToken: Contract
   let safeMintWithETH, safeExerciseWithETH, safeExerciseForETH, safeRedeemForETH, safeCloseForETH
-  let params
+  let params, uniswapRouter, uniswapFactory
 
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
@@ -54,6 +54,10 @@ describe('Router', function () {
     weth = await deployWeth(signer)
     tokens = await deployTokens(signer, 2, ['comp', 'dai'])
     ;[comp, dai] = tokens
+    const uniswap = await setup.newUniswap(signer, Alice, weth)
+    uniswapFactory = uniswap.uniswapFactory
+    uniswapRouter = uniswap.uniswapRouter
+    await uniswapFactory.setFeeTo(Alice)
 
     // 3. select option params
     baseToken = weth
@@ -66,9 +70,15 @@ describe('Router', function () {
     router = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
 
     // 5. deploy connector
-    connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
-    liquidity = await deploy('PrimitiveLiquidity', { from: signers[0], args: [weth.address, router.address, registry.address] })
-    swaps = await deploy('PrimitiveSwaps', { from: signers[0], args: [weth.address, router.address, registry.address] })
+    connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
+    liquidity = await deploy('PrimitiveLiquidity', {
+      from: signers[0],
+      args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
+    })
+    swaps = await deploy('PrimitiveSwaps', {
+      from: signers[0],
+      args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
+    })
 
     await router.init(connector.address, liquidity.address, swaps.address)
 
@@ -188,7 +198,10 @@ describe('Router', function () {
       // Deploy a new router & connector instance
       router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
       connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address, registry.address] })
-      liquidity = await deploy('PrimitiveLiquidity', { from: signers[0], args: [weth.address, router.address, registry.address] })
+      liquidity = await deploy('PrimitiveLiquidity', {
+        from: signers[0],
+        args: [weth.address, router.address, registry.address],
+      })
       swaps = await deploy('PrimitiveSwaps', { from: signers[0], args: [weth.address, router.address, registry.address] })
       await router.init(connector.address, liquidity.address, swaps.address)
       // Approve the tokens that are being used
@@ -210,21 +223,19 @@ describe('Router', function () {
       let redeemBal = await getTokenBalance(redeemToken, Alice)
 
       await router.executeCall(connector.address, mintparams, {
-          value: inputUnderlyings,
+        value: inputUnderlyings,
       })
       await router.halt()
 
       await expect(
         router.executeCall(connector.address, mintparams, {
-            value: inputUnderlyings,
+          value: inputUnderlyings,
         })
-      ).to.be.revertedWith("CONTRACT_HALTED")
+      ).to.be.revertedWith('CONTRACT_HALTED')
     })
 
     it('Only deployer can halt', async () => {
-      await expect(
-        router.connect(signers[2]).halt()
-      ).to.be.revertedWith("NOT_DEPLOYER")
+      await expect(router.connect(signers[2]).halt()).to.be.revertedWith('NOT_DEPLOYER')
     })
 
     it('should handle multiple transactions', async () => {

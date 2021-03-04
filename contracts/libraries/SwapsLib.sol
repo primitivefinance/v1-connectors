@@ -31,13 +31,7 @@ pragma solidity ^0.6.2;
 import {
     IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-// Primitive
-import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol";
-// Open Zeppelin
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
-import {CoreLib} from "./CoreLib.sol";
+import {CoreLib, IOption, SafeMath} from "./CoreLib.sol";
 
 library SwapsLib {
     using SafeMath for uint256; // Reverts on math underflows/overflows

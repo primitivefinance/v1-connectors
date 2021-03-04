@@ -100,7 +100,7 @@ const getParams = (connector: Contract, method: string, args: any[]) => {
   return params
 }
 
-describe('PrimitiveLiquidity', function () {
+describe('Swaps', function () {
   // ACCOUNTS
   let Admin, User, Alice, Bob
 
@@ -226,11 +226,12 @@ describe('PrimitiveLiquidity', function () {
     })
   })
 
-  describe('uniswapV2Call', () => {
+  /* describe('uniswapV2Call', () => {
     it('uniswapV2Call()', async () => {
-      await expect(primitiveRouter.uniswapV2Call(Alice, '0', '0', ['1'])).to.be.reverted
+      let params = getParams(connector, 'uniswapV2Call', [Alice, '0', '0', ['1']])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector, params)).to.be.reverted
     })
-  })
+  }) */
 
   describe('openFlashLong()', () => {
     before(async () => {

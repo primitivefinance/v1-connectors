@@ -152,7 +152,6 @@ export async function getApprovalDigest(
   const name = await token.name()
   const chainId: number = +(await hardhat.getChainId())
   const DOMAIN_SEPARATOR = await token.DOMAIN_SEPARATOR() /* getDomainSeparator(name, token.address, chainId) */
-  console.log(name, chainId, DOMAIN_SEPARATOR)
   return keccak256(
     solidityPack(
       ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
