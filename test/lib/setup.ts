@@ -15,6 +15,7 @@ import OptionTemplateLib from '@primitivefi/contracts/artifacts/OptionTemplateLi
 import RedeemTemplateLib from '@primitivefi/contracts/artifacts/RedeemTemplateLib.json'
 import PrimitiveRouter from '../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter.json'
 import PrimitiveRouterTest from '../../build/contracts/test/PrimitiveRouterTest.sol/PrimitiveRouterTest.json'
+import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/PrimitiveCore.json'
 
 // Constants and Utility functions
 import constants from './constants'
@@ -268,6 +269,11 @@ export const newTestRouter = async (signer, params) => {
     gasLimit: 9500000,
   })
   return router
+}
+
+export const newCoreConnector = async (signer, params) => {
+  const core = await deployContract(signer, PrimitiveCore, params, { gasLimit: 9500000 })
+  return core
 }
 
 /**

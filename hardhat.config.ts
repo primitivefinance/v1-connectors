@@ -28,6 +28,9 @@ const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
   networks: {
+    hardhat: {
+      chainId: 1337,
+    },
     coverage: {
       url: 'http://localhost:8555',
       gas: 12000000,

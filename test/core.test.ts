@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-wit
 import chai, { expect } from 'chai'
 import { solidity } from 'ethereum-waffle'
 chai.use(solidity)
-import { BigNumber, BigNumberish, Contract } from 'ethers'
+import { BigNumber, BigNumberish, Contract, Wallet } from 'ethers'
 import { parseEther, formatEther } from 'ethers/lib/utils'
 import { ethers, waffle } from 'hardhat'
 import { deploy, deployTokens, deployWeth, batchApproval, tokenFromAddress } from './lib/erc20'
@@ -12,6 +12,7 @@ const { AddressZero } = ethers.constants
 import * as utils from './lib/utils'
 import * as setup from './lib/setup'
 import constants from './lib/constants'
+import { ecsign } from 'ethereumjs-util'
 const { assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 
 const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = constants.VALUES
@@ -31,7 +32,7 @@ describe('PrimitiveCore', function () {
   let Primitive: any
   let optionToken: Contract, redeemToken: Contract
   let safeMintWithETH, safeExerciseWithETH, safeExerciseForETH, safeRedeemForETH, safeCloseForETH
-  let params
+  let params, wallet: Wallet
 
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
@@ -485,6 +486,48 @@ describe('PrimitiveCore', function () {
       await safeExerciseWithETH(parseEther('0.1'))
       await safeExerciseWithETH(parseEther('0.32525'))
       await safeExerciseWithETH(parseEther('0.1'))
+    })
+  })
+
+  describe('safeMintWithPermit()', function () {
+    before(async function () {
+      const provider = waffle.provider
+      ;[wallet] = provider.getWallets()
+      // Deploy a new router instance
+      router = await setup.newTestRouter(wallet, [weth.address, weth.address, weth.address, registry.address])
+      connector = await setup.newCoreConnector(wallet, [weth.address, router.address])
+      await router.init(connector.address, AddressZero, AddressZero)
+      await router.validateOption(optionToken.address)
+      // Approve tokens for router to use
+      await weth.approve(router.address, MILLION_ETHER)
+      await optionToken.approve(router.address, MILLION_ETHER)
+      await redeemToken.approve(router.address, MILLION_ETHER)
+    })
+
+    it('use permitted underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
+      let inputUnderlyings = parseEther('0.1')
+      let outputRedeems = inputUnderlyings.mul(quote).div(base)
+      const nonce = await baseToken.nonces(wallet.address)
+      const digest = await utils.getApprovalDigest(
+        baseToken,
+        { owner: wallet.address, spender: router.address, value: inputUnderlyings },
+        nonce,
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let params = await utils.getParams(connector, 'safeMintWithPermit', [
+        optionToken.address,
+        inputUnderlyings,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+      await expect(router.connect(wallet).executeCall(connector.address, params))
+        .to.emit(connector, 'Minted')
+        .withArgs(Alice, optionToken.address, inputUnderlyings, outputRedeems)
+        .to.emit(router, 'Executed')
     })
   })
 })

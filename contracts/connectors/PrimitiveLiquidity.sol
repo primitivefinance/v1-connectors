@@ -51,6 +51,19 @@ import {CoreLib} from "../libraries/CoreLib.sol";
 
 import "hardhat/console.sol";
 
+interface DaiPermit {
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 contract PrimitiveLiquidity is
     PrimitiveConnector,
     IPrimitiveLiquidity,
@@ -145,6 +158,8 @@ contract PrimitiveLiquidity is
         (, uint256 outputRedeems) =
             IOption(optionAddress).mintOptions(address(this));
 
+        console.log("minted options");
+
         {
             // scope for adding exact liquidity, avoids stack too deep errors
             IOption optionToken = IOption(optionAddress);
@@ -190,7 +205,7 @@ contract PrimitiveLiquidity is
      * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
-    /* function addShortLiquidityWithUnderlyingWithPermit(
+    function addShortLiquidityWithUnderlyingWithPermit(
         address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,
@@ -208,64 +223,73 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
-        uint256 amountA;
-        uint256 amountB;
-        uint256 liquidity;
+        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+        uint256 sum;
         {
-            IOption optionToken = IOption(optionAddress);
-            address underlying = optionToken.getUnderlyingTokenAddress();
-            IERC20Permit(underlying).permit(
-                getCaller(),
-                address(this),
-                uint256(-1),
-                deadline,
-                v,
-                r,
-                s
-            );
-
-            uint256 amt = quantityOptions;
-            // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-            IERC20(underlying).transferFrom(
-                msg.sender,
-                address(optionToken),
-                amt
-            );
+            sum = quantityOptions.add(amountBMax);
         }
-
-        {
-            // scope for adding exact liquidity, avoids stack too deep errors
-            IOption optionToken = IOption(optionAddress);
-            (, uint256 outputRedeems) = optionToken.mintOptions(address(this));
-            address redeem = optionToken.redeemToken();
-            address underlying = optionToken.getUnderlyingTokenAddress();
-            AddAmounts memory params;
-            params.amountAMax = outputRedeems;
-            params.amountBMax = amountBMax;
-            params.amountAMin = outputRedeems;
-            params.amountBMin = amountBMin;
-            params.deadline = deadline;
-
-            // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(router));
-            checkApproval(underlying, address(router));
-
-            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
-            (amountA, amountB, liquidity) = _addLiquidity(
-                redeem,
-                underlying,
-                params
+        console.log("calling permit");
+        IERC20Permit(underlying).permit(
+            getCaller(),
+            address(_primitiveRouter),
+            sum,
+            deadline,
+            v,
+            r,
+            s
+        );
+        console.log("permitted");
+        return
+            addShortLiquidityWithUnderlying(
+                optionAddress,
+                quantityOptions,
+                amountBMax,
+                amountBMin,
+                to,
+                deadline
             );
-            // check for exact liquidity provided
-            assert(amountA == outputRedeems);
-            // Return remaining tokens
-            _transferToCaller(underlying);
-            _transferToCaller(redeem);
-        }
+    }
 
-        emit AddLiquidity(getCaller(), optionAddress, liquidity);
-        return (amountA, amountB, liquidity);
-    } */
+    function addShortLiquidityWithUnderlyingWithDaiPermit(
+        address optionAddress,
+        uint256 quantityOptions,
+        uint256 amountBMax,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+        DaiPermit(underlying).permit(
+            getCaller(),
+            address(this),
+            IERC20Permit(underlying).nonces(getCaller()),
+            deadline,
+            true,
+            v,
+            r,
+            s
+        );
+
+        return
+            addShortLiquidityWithUnderlying(
+                optionAddress,
+                quantityOptions,
+                amountBMax,
+                amountBMin,
+                to,
+                deadline
+            );
+    }
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
@@ -495,16 +519,18 @@ contract PrimitiveLiquidity is
             bytes32 r_ = r;
             bytes32 s_ = s;
             (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
+            console.log("permitting");
             pair.permit(
                 getCaller(),
-                address(this),
-                uint256(-1),
+                address(_primitiveRouter),
+                liquidity_,
                 deadline_,
                 v_,
                 r_,
                 s_
             );
         }
+        console.log("calling remove");
         return
             removeShortLiquidityThenCloseOptions(
                 address(optionToken),
@@ -527,7 +553,6 @@ contract PrimitiveLiquidity is
         public
         view
         override
-        onlyRegistered(option)
         returns (
             IUniswapV2Pair,
             address,
