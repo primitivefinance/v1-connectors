@@ -26,12 +26,20 @@ import {
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 import {IERC20Permit} from "./IERC20Permit.sol";
 
-
 interface IPrimitiveCore {
     function safeMintWithETH(IOption optionToken)
         external
         payable
         returns (uint256, uint256);
+
+    function safeMintWithPermit(
+        IOption optionToken,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256, uint256);
 
     function safeExerciseWithETH(IOption optionToken)
         external
