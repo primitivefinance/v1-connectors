@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   A Connector with Ether abstractions for Primitive Option tokens.
- * @notice  Primitive Core - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Core
  * @author  Primitive
+ * @notice  A Connector with Ether abstractions for Primitive Option tokens.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin
@@ -168,7 +169,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         address strike = optionToken.getStrikeTokenAddress();
         uint256 strikeQuantity =
             CoreLib.getProportionalShortOptions(optionToken, exerciseQuantity);
-        // Pull options and strike assets from the `getCaller()` and send to option contract.
+        // Pull options and strike assets from `getCaller()` and send to option contract.
         _transferFromCallerToReceiver(
             address(optionToken),
             exerciseQuantity,

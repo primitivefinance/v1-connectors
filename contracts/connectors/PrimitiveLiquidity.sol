@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Manage liquidity on Uniswap & Sushiswap Venues.
- * @notice  Primitive Liquidity - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Liquidity
  * @author  Primitive
+ * @notice  Manage liquidity on Uniswap & Sushiswap Venues.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin

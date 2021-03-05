@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Swap option tokens on Uniswap & Sushiswap venues.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Router
  * @author  Primitive
+ * @notice  Swap option tokens on Uniswap & Sushiswap venues.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin

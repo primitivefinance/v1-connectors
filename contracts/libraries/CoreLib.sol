@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Library for calculating different proportions of long and short Option tokens.
- * @notice  Primitive Swaps Lib - @primitivefi/v1-connectors@2.0.0
+ * @title   Primitive Swaps Lib
  * @author  Primitive
+ * @notice  Library for calculating different proportions of long and short option tokens.
+ * @dev     @primitivefi/v1-connectors@2.0.0
  */
 
 import {IOption} from "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol";

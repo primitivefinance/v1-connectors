@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Contract to execute Primitive Connector functions.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Router
  * @author  Primitive
+ * @notice  Contract to execute Primitive Connector functions.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin

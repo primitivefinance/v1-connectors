@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Library for Swap Logic for Uniswap AMM.
- * @notice  Primitive Swaps Lib - @primitivefi/v1-connectors@2.0.0
+ * @title   Primitive Swaps Lib
  * @author  Primitive
+ * @notice  Library for Swap Logic for Uniswap AMM.
+ * @dev     @primitivefi/v1-connectors@2.0.0
  */
 
 import {

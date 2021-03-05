@@ -22,9 +22,10 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Low-level abstract contract for Primitive Connectors to inherit from.
- * @notice  Primitive Connector - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Connector
  * @author  Primitive
+ * @notice  Low-level abstract contract for Primitive Connectors to inherit from.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin
