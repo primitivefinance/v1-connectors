@@ -30,16 +30,10 @@ pragma solidity ^0.6.2;
 // Open Zeppelin
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Primitive
 import {CoreLib, SafeMath} from "../libraries/CoreLib.sol";
-import {
-    IPrimitiveCore,
-    IERC20Permit,
-    IOption
-} from "../interfaces/IPrimitiveCore.sol";
+import {IPrimitiveCore, IERC20Permit, IOption} from "../interfaces/IPrimitiveCore.sol";
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 
 contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
@@ -49,25 +43,13 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     event Initialized(address indexed from); // Emmitted on deployment
     event Minted(
         address indexed from,
-        address indexed optionToken,
+        address indexed option,
         uint256 longQuantity,
         uint256 shortQuantity
     );
-    event Exercised(
-        address indexed from,
-        address indexed optionToken,
-        uint256 quantity
-    );
-    event Redeemed(
-        address indexed from,
-        address indexed optionToken,
-        uint256 quantity
-    );
-    event Closed(
-        address indexed from,
-        address indexed optionToken,
-        uint256 quantity
-    );
+    event Exercised(address indexed from, address indexed option, uint256 quantity);
+    event Redeemed(address indexed from, address indexed option, uint256 quantity);
+    event Closed(address indexed from, address indexed option, uint256 quantity);
 
     // ===== Constructor =====
 
@@ -96,8 +78,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         require(msg.value > 0, "PrimitiveCore: ERR_ZERO");
         address caller = getCaller();
         _depositETH();
-        (uint256 long, uint256 short) =
-            _mintOptionsToReceiver(optionToken, caller);
+        (uint256 long, uint256 short) = _mintOptionsToReceiver(optionToken, caller);
         emit Minted(caller, address(optionToken), long, short);
         return (long, short);
     }
@@ -132,8 +113,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
             r,
             s
         );
-        (uint256 long, uint256 short) =
-            _mintOptionsPermitted(optionToken, amount);
+        (uint256 long, uint256 short) = _mintOptionsFromCaller(optionToken, amount);
         emit Minted(getCaller(), address(optionToken), long, short);
         return (long, short);
     }
@@ -158,8 +138,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
 
         _depositETH();
 
-        uint256 long =
-            CoreLib.getProportionalLongOptions(optionToken, msg.value);
+        uint256 long = CoreLib.getProportionalLongOptions(optionToken, msg.value);
         _transferFromCaller(address(optionToken), long);
 
         emit Exercised(getCaller(), address(optionToken), long);
@@ -192,18 +171,10 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
             exerciseQuantity,
             address(optionToken)
         );
-        _transferFromCallerToReceiver(
-            strike,
-            strikeQuantity,
-            address(optionToken)
-        );
+        _transferFromCallerToReceiver(strike, strikeQuantity, address(optionToken));
 
         (uint256 strikesPaid, uint256 options) =
-            optionToken.exerciseOptions(
-                address(this),
-                exerciseQuantity,
-                new bytes(0)
-            );
+            optionToken.exerciseOptions(address(this), exerciseQuantity, new bytes(0));
 
         // Converts the withdrawn WETH to ethers, then sends the ethers to the getCaller() address.
         _withdrawETH();
@@ -228,11 +199,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
         // Require the strike token to be Weth.
         address redeem = optionToken.redeemToken();
         // Pull redeems
-        _transferFromCallerToReceiver(
-            redeem,
-            redeemQuantity,
-            address(optionToken)
-        );
+        _transferFromCallerToReceiver(redeem, redeemQuantity, address(optionToken));
         // Push redeems to option contract
         uint256 short = optionToken.redeemStrikeTokens(address(this));
         _withdrawETH();
@@ -262,8 +229,7 @@ contract PrimitiveCore is PrimitiveConnector, IPrimitiveCore, ReentrancyGuard {
     {
         address redeem = optionToken.redeemToken();
 
-        uint256 short =
-            CoreLib.getProportionalShortOptions(optionToken, closeQuantity);
+        uint256 short = CoreLib.getProportionalShortOptions(optionToken, closeQuantity);
         // Pull tokens
         _transferFromCallerToReceiver(redeem, short, address(optionToken));
 
