@@ -25,18 +25,17 @@ import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
 import {IWETH} from "../interfaces/IWETH.sol";
 
 interface IPrimitiveConnector {
-    function checkApproval(address token, address spender)
-        external
-        returns (bool);
+    // ===== External =====
 
-    function isApproved(address token, address spender)
-        external
-        view
-        returns (bool);
+    function checkApproval(address token, address spender) external returns (bool);
+
+    // ===== View =====
 
     function getWeth() external view returns (IWETH);
 
+    function getCaller() external view returns (address);
+
     function getPrimitiveRouter() external view returns (IPrimitiveRouter);
 
-    function getCaller() external view returns (address);
+    function isApproved(address token, address spender) external view returns (bool);
 }

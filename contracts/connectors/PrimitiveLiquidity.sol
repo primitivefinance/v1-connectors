@@ -22,18 +22,16 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   A Connector contract to manage liquidity on Uniswap & Sushiswap Venues.
- * @notice  Primitive Liquidity - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Liquidity
  * @author  Primitive
+ * @notice  Manage liquidity on Uniswap & Sushiswap Venues.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 // Interfaces
 import {
     IPrimitiveLiquidity,
@@ -43,7 +41,6 @@ import {
     IERC20Permit,
     IOption
 } from "../interfaces/IPrimitiveLiquidity.sol";
-
 // Primitive
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 import {CoreLib, SafeMath} from "../libraries/CoreLib.sol";
@@ -61,41 +58,20 @@ interface DaiPermit {
     ) external;
 }
 
-contract PrimitiveLiquidity is
-    PrimitiveConnector,
-    IPrimitiveLiquidity,
-    ReentrancyGuard
-{
+contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, ReentrancyGuard {
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
-    /**
-     * @dev Emitted on deployment.
-     */
-    event Initialized(address indexed from);
-
-    /**
-     * @dev Emitted when liquidity is added to an Option market.
-     */
-    event AddLiquidity(
-        address indexed from,
-        address indexed option,
-        uint256 liquidity
-    );
-
-    /**
-     * @dev Emitted when liquidity is removed from an Option market.
-     */
+    event Initialized(address indexed from); // Emitted on deployment.
+    event AddLiquidity(address indexed from, address indexed option, uint256 liquidity);
     event RemoveLiquidity(
         address indexed from,
         address indexed option,
-        uint256 underlyingWithdrawn
+        uint256 totalUnderlying
     );
 
-    IUniswapV2Factory public factory =
-        IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 factory contract to get pair addresses from
-    IUniswapV2Router02 public router =
-        IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // The Uniswap contract used to interact with the protocol
+    IUniswapV2Factory private _factory; // The Uniswap V2 factory contract to get pair addresses from.
+    IUniswapV2Router02 private _router; // The Uniswap Router contract used to interact with the protocol.
 
     // ===== Constructor =====
     constructor(
@@ -104,20 +80,20 @@ contract PrimitiveLiquidity is
         address factory_,
         address router_
     ) public PrimitiveConnector(weth_, primitiveRouter_) {
-        factory = IUniswapV2Factory(factory_);
-        router = IUniswapV2Router02(router_);
+        _factory = IUniswapV2Factory(factory_);
+        _router = IUniswapV2Router02(router_);
         emit Initialized(_msgSender());
     }
 
     // ===== Liquidity Operations =====
 
     /**
-     * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+     * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting redeemTokens with underlyingTokens.
      * @notice  Pulls underlying tokens from _msgSender() and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
      *          underlyingToken -> redeemToken -> UNI-V2.
      * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
      * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
-     * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
+     * @param   amountBMax The quantity of underlyingTokens to add with redeemTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
      * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
@@ -144,17 +120,14 @@ contract PrimitiveLiquidity is
         uint256 amountB;
         uint256 liquidity;
         address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-        // Pulls SUM = quantityOptions + amountBMax of underlyingTokens from _msgSender() to this contract.
-        // Warning: calls into _msgSender() using `safeTransferFrom`. _msgSender() is not trusted.
+        // Pulls total = (quantityOptions + amountBMax) of underlyingTokens from `getCaller()` to this contract.
         {
             uint256 sum = quantityOptions.add(amountBMax);
             _transferFromCaller(underlying, sum);
-            // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-            IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
         }
         // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
-        (, uint256 outputRedeems) =
-            IOption(optionAddress).mintOptions(address(this));
+        IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
+        (, uint256 outputRedeems) = IOption(optionAddress).mintOptions(address(this));
 
         {
             // scope for adding exact liquidity, avoids stack too deep errors
@@ -166,18 +139,12 @@ contract PrimitiveLiquidity is
             params.amountAMin = outputRedeems;
             params.amountBMin = amountBMin;
             params.deadline = deadline;
-
             // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(router));
-            checkApproval(underlying, address(router));
-
+            checkApproval(redeem, address(_router));
+            checkApproval(underlying, address(_router));
             // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
-            (amountA, amountB, liquidity) = _addLiquidity(
-                redeem,
-                underlying,
-                params
-            );
-            // check for exact liquidity provided
+            (amountA, amountB, liquidity) = _addLiquidity(redeem, underlying, params);
+            // Check for exact liquidity provided.
             assert(amountA == outputRedeems);
             // Return remaining tokens
             _transferToCaller(underlying);
@@ -219,20 +186,20 @@ contract PrimitiveLiquidity is
             uint256
         )
     {
-        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-        uint256 sum;
         {
-            sum = quantityOptions.add(amountBMax);
+            // avoids stack too deep errors
+            address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
+            uint256 sum = quantityOptions.add(amountBMax);
+            IERC20Permit(underlying).permit(
+                getCaller(),
+                address(_primitiveRouter),
+                sum,
+                deadline,
+                v,
+                r,
+                s
+            );
         }
-        IERC20Permit(underlying).permit(
-            getCaller(),
-            address(_primitiveRouter),
-            sum,
-            deadline,
-            v,
-            r,
-            s
-        );
         return
             addShortLiquidityWithUnderlying(
                 optionAddress,
@@ -244,6 +211,9 @@ contract PrimitiveLiquidity is
             );
     }
 
+    /**
+     * @notice  Specialized function for `permit` calling on Put options (DAI).
+     */
     function addShortLiquidityWithUnderlyingWithDaiPermit(
         address optionAddress,
         uint256 quantityOptions,
@@ -276,7 +246,6 @@ contract PrimitiveLiquidity is
             r,
             s
         );
-
         return
             addShortLiquidityWithUnderlying(
                 optionAddress,
@@ -329,12 +298,10 @@ contract PrimitiveLiquidity is
         address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
         require(underlying == address(_weth), "PrimitiveLiquidity: NOT_WETH");
 
-        // Wraps `msg.value` to Weth.
-        _depositETH();
-        // Pushes underlyingTokens to option contract and mints option + redeem tokens to this contract.
+        _depositETH(); // Wraps `msg.value` to Weth.
+        // Pushes Weth to option contract and mints option + redeem tokens to this contract.
         IERC20(underlying).safeTransfer(optionAddress, quantityOptions);
-        (, uint256 outputRedeems) =
-            IOption(optionAddress).mintOptions(address(this));
+        (, uint256 outputRedeems) = IOption(optionAddress).mintOptions(address(this));
 
         {
             // scope for adding exact liquidity, avoids stack too deep errors
@@ -348,23 +315,16 @@ contract PrimitiveLiquidity is
             params.deadline = deadline;
 
             // Approves Uniswap V2 Pair pull tokens from this contract.
-            checkApproval(redeem, address(router));
-            checkApproval(underlying, address(router));
-
-            // Adds liquidity to Uniswap V2 Pair and returns liquidity shares to the "getCaller()" address.
-            (amountA, amountB, liquidity) = _addLiquidity(
-                redeem,
-                underlying,
-                params
-            );
-            // check for exact liquidity provided
-            assert(amountA == outputRedeems);
-            // Return remaining tokens
+            checkApproval(redeem, address(_router));
+            checkApproval(underlying, address(_router));
+            // Adds liquidity to Uniswap V2 Pair.
+            (amountA, amountB, liquidity) = _addLiquidity(redeem, underlying, params);
+            assert(amountA == outputRedeems); // Check for exact liquidity provided.
+            // Return remaining tokens and ether.
             _withdrawETH();
             _transferToCaller(redeem);
             _transferToCaller(address(optionToken));
         }
-
         emit AddLiquidity(getCaller(), optionAddress, liquidity);
         return (amountA, amountB, liquidity);
     }
@@ -377,6 +337,13 @@ contract PrimitiveLiquidity is
         uint256 deadline;
     }
 
+    /**
+     * @notice  Calls UniswapV2Router02.addLiquidity() function using this contract's tokens.
+     * @param   tokenA The first token of the Uniswap Pair to add as liquidity.
+     * @param   tokenB The second token of the Uniswap Pair to add as liquidity.
+     * @param   params The amounts specified to be added as liquidity. Adds exact short options.
+     * @return  Returns the (amountTokenA, amountTokenB, liquidity).
+     */
     function _addLiquidity(
         address tokenA,
         address tokenB,
@@ -390,7 +357,7 @@ contract PrimitiveLiquidity is
         )
     {
         return
-            router.addLiquidity(
+            _router.addLiquidity(
                 tokenA,
                 tokenB,
                 params.amountAMax,
@@ -432,38 +399,27 @@ contract PrimitiveLiquidity is
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
+        // Gets amounts struct.
         RemoveAmounts memory params;
         params.liquidity = liquidity;
         params.amountAMin = amountAMin;
         params.amountBMin = amountBMin;
         params.deadline = deadline;
-
-        _transferFromCaller(address(pair), liquidity);
-        checkApproval(address(pair), address(router));
-
-        (uint256 shortTokensWithdrawn, uint256 underlyingTokensWithdrawn) =
-            _removeLiquidity(redeem, underlying, params);
-
-        uint256 long =
-            CoreLib.getProportionalLongOptions(
-                optionToken,
-                shortTokensWithdrawn
-            );
-
-        uint256 proceeds = _closeOptions(optionToken);
-
-        _transferToCaller(redeem);
+        _transferFromCaller(address(pair), liquidity); // Pulls lp tokens from `getCaller()`.
+        checkApproval(address(pair), address(_router)); // Checks lp tokens can be pulled from here.
+        // Calls removeLiquidity on the UniswapV2Router02.
+        (, uint256 underlyingAmount) = _removeLiquidity(redeem, underlying, params);
+        uint256 underlyingProceeds = _closeOptions(optionToken); // Returns amount of underlying tokens released.
+        // Return remaining tokens/ether.
+        _transferToCaller(redeem); // Push any remaining redeemTokens from removing liquidity (dust).
         if (underlying == address(_weth)) {
-            _withdrawETH();
+            _withdrawETH(); // Unwraps Weth and sends ether to `getCaller()`.
         } else {
-            _transferToCaller(underlying);
+            _transferToCaller(underlying); // Pushes underlying token to `getCaller()`.
         }
-        emit RemoveLiquidity(
-            getCaller(),
-            address(optionToken),
-            proceeds.add(underlyingTokensWithdrawn)
-        );
-        return (underlyingTokensWithdrawn.add(proceeds));
+        uint256 sum = underlyingProceeds.add(underlyingAmount); // Total underlyings sent to `getCaller()`.
+        emit RemoveLiquidity(getCaller(), address(optionToken), sum);
+        return sum;
     }
 
     struct RemoveAmounts {
@@ -473,13 +429,20 @@ contract PrimitiveLiquidity is
         uint256 deadline;
     }
 
+    /**
+     * @notice  Calls UniswapV2Router02.removeLiquidity() to burn LP tokens for pair tokens.
+     * @param   tokenA The first token of the pair.
+     * @param   tokenB The second token of the pair.
+     * @param   params The amounts to specify the amount to remove and minAmounts to withdraw.
+     * @return  Returns (amountTokenA, amountTokenB) to this contract.
+     */
     function _removeLiquidity(
         address tokenA,
         address tokenB,
         RemoveAmounts memory params
     ) internal returns (uint256, uint256) {
         return
-            router.removeLiquidity(
+            _router.removeLiquidity(
                 tokenA,
                 tokenB,
                 params.liquidity,
@@ -490,6 +453,16 @@ contract PrimitiveLiquidity is
             );
     }
 
+    /**
+     * @notice  Pulls LP tokens, burns them, removes liquidity, pull option token, burns then, pushes all underlying tokens.
+     * @dev     Uses permit to pull LP tokens.
+     * @param   optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
+     * @param   liquidity The quantity of liquidity tokens to pull from _msgSender() and burn.
+     * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
+     * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
+     * @param   to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
+     * @param   deadline The timestamp to expire a pending transaction and `permit` call.
+     */
     function removeShortLiquidityThenCloseOptionsWithPermit(
         address optionAddress,
         uint256 liquidity,
@@ -500,12 +473,7 @@ contract PrimitiveLiquidity is
         uint8 v,
         bytes32 r,
         bytes32 s
-    )
-        external
-        override
-        onlyRegistered(IOption(optionAddress))
-        returns (uint256)
-    {
+    ) external override onlyRegistered(IOption(optionAddress)) returns (uint256) {
         IOption optionToken = IOption(optionAddress);
         uint256 liquidity_ = liquidity;
         uint256 deadline_ = deadline;
@@ -541,8 +509,22 @@ contract PrimitiveLiquidity is
     // ===== View =====
 
     /**
-     * @notice  Input validation that checks the option against Primitive's registry contract.
-     * @dev     Prevents tainted Uniswap pairs that have an evil option as a pair token.
+     * @notice  Gets the UniswapV2Router02 contract address.
+     */
+    function getRouter() public view override returns (IUniswapV2Router02) {
+        return _router;
+    }
+
+    /**
+     * @notice  Gets the UniswapV2Factory contract address.
+     */
+    function getFactory() public view override returns (IUniswapV2Factory) {
+        return _factory;
+    }
+
+    /**
+     * @notice  Fetchs the Uniswap Pair for an option's redeemToken and underlyingToken params.
+     * @param   option The option token to get the corresponding UniswapV2Pair market.
      * @return  The pair address, as well as the tokens of the pair.
      */
     function getOptionPair(IOption option)
@@ -555,18 +537,9 @@ contract PrimitiveLiquidity is
             address
         )
     {
-        address redeemToken = option.redeemToken();
-        address underlyingToken = option.getUnderlyingTokenAddress();
-        IUniswapV2Pair pair =
-            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
-        return (pair, underlyingToken, redeemToken);
-    }
-
-    function getRouter() public view override returns (IUniswapV2Router02) {
-        return router;
-    }
-
-    function getFactory() public view override returns (IUniswapV2Factory) {
-        return factory;
+        address redeem = option.redeemToken();
+        address underlying = option.getUnderlyingTokenAddress();
+        IUniswapV2Pair pair = IUniswapV2Pair(_factory.getPair(redeem, underlying));
+        return (pair, underlying, redeem);
     }
 }

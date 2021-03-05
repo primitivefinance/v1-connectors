@@ -22,22 +22,21 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   A user-friendly smart contract to interface with the Primitive and Uniswap protocols.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Router
  * @author  Primitive
+ * @notice  Swap option tokens on Uniswap & Sushiswap venues.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+// Uniswap
 import {
     IUniswapV2Callee
 } from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol";
-
+// Primitive
 import {
     IPrimitiveSwaps,
     IUniswapV2Router02,
@@ -58,24 +57,13 @@ contract PrimitiveSwaps is
     using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
-    /**
-     * @dev Emitted on deployment.
-     */
-    event Initialized(address indexed from);
-
-    /**
-     * @dev Emmitted on purchasing long option tokens.
-     */
+    event Initialized(address indexed from); // Emitted on deployment.
     event Buy(
         address indexed from,
         address indexed option,
         uint256 quantity,
         uint256 premium
     );
-
-    /**
-     * @dev Emmitted on selling long option tokens.
-     */
     event Sell(
         address indexed from,
         address indexed option,
@@ -83,10 +71,8 @@ contract PrimitiveSwaps is
         uint256 payout
     );
 
-    IUniswapV2Factory public factory =
-        IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 factory contract to get pair addresses from
-    IUniswapV2Router02 public router =
-        IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // The Uniswap contract used to interact with the protocol
+    IUniswapV2Factory private _factory; // The Uniswap V2 _factory contract to get pair addresses from
+    IUniswapV2Router02 private _router; // The Uniswap contract used to interact with the protocol
 
     modifier onlySelf() {
         require(_msgSender() == address(this), "PrimitiveSwaps: NOT_SELF");
@@ -100,49 +86,50 @@ contract PrimitiveSwaps is
         address factory_,
         address router_
     ) public PrimitiveConnector(weth_, primitiveRouter_) {
-        factory = IUniswapV2Factory(factory_);
-        router = IUniswapV2Router02(router_);
+        _factory = IUniswapV2Factory(factory_);
+        _router = IUniswapV2Router02(router_);
         emit Initialized(_msgSender());
     }
 
     // ===== Swap Operations =====
 
     /**
-     * @dev    Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
-     * @notice IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
-     *         IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
-     * @param optionToken The option address.
-     * @param amountOptions The quantity of longOptionTokens to purchase.
-     * @param maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
+     * @notice  IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
+     *          IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
+     * @dev     Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
+     * @param   optionToken The option address.
+     * @param   amountOptions The quantity of longOptionTokens to purchase.
+     * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
+     * @return  Whether or not the call succeeded.
      */
     function openFlashLong(
         IOption optionToken,
         uint256 amountOptions,
         uint256 maxPremium
     ) public override nonReentrant onlyRegistered(optionToken) returns (bool) {
-        // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
-        (IUniswapV2Pair pair, address underlying, ) =
-            getOptionPair(optionToken);
+        // Calls pair.swap(), and executes `flashMintShortOptionsThenSwap` in the `uniswapV2Callee` callback.
+        (IUniswapV2Pair pair, address underlying, ) = getOptionPair(optionToken);
         _flashSwap(
-            pair, // Pair to flash swap from
-            underlying, // Token to swap to, i.e. receive optimistically
-            amountOptions, // Amount of underlying to optimistically receive
-            abi.encodeWithSelector(
+            pair, // Pair to flash swap from.
+            underlying, // Token to swap to, i.e. receive optimistically.
+            amountOptions, // Amount of underlying to optimistically receive to mint options with.
+            abi.encodeWithSelector( // Start: Function to call in the callback.
                 bytes4(
                     keccak256(
-                        bytes(
-                            "flashMintShortOptionsThenSwap(address,uint256,uint256)"
-                        )
+                        bytes("flashMintShortOptionsThenSwap(address,uint256,uint256)")
                     )
-                ), // function to call in this contract
-                optionToken, // option token to mint with flash loaned tokens
-                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
-                maxPremium // total price paid (in underlyingTokens) for selling shortOptionTokens
-            ) // Function to execute in the `uniswapV2Callee` callback.
+                ),
+                optionToken, // Option token to mint with flash loaned tokens.
+                amountOptions, // Quantity of underlyingTokens from flash loan to use to mint options.
+                maxPremium // Total price paid (in underlyingTokens) for selling shortOptionTokens.
+            ) // End: Function to call in the callback.
         );
         return true;
     }
 
+    /**
+     * @notice  Executes the same as `openFlashLong`, but calls `permit` to pull underlying tokens.
+     */
     function openFlashLongWithPermit(
         IOption optionToken,
         uint256 amountOptions,
@@ -152,9 +139,8 @@ contract PrimitiveSwaps is
         bytes32 r,
         bytes32 s
     ) public override nonReentrant onlyRegistered(optionToken) returns (bool) {
-        // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
-        (IUniswapV2Pair pair, address underlying, ) =
-            getOptionPair(optionToken);
+        // Calls pair.swap(), and executes `flashMintShortOptionsThenSwap` in the `uniswapV2Callee` callback.
+        (IUniswapV2Pair pair, address underlying, ) = getOptionPair(optionToken);
         IERC20Permit(underlying).permit(
             getCaller(),
             address(_primitiveRouter),
@@ -165,29 +151,28 @@ contract PrimitiveSwaps is
             s
         );
         _flashSwap(
-            pair, // Pair to flash swap from
-            underlying, // Token to swap to, i.e. receive optimistically
-            amountOptions, // Amount of underlying to optimistically receive
-            abi.encodeWithSelector(
+            pair, // Pair to flash swap from.
+            underlying, // Token to swap to, i.e. receive optimistically.
+            amountOptions, // Amount of underlying to optimistically receive to mint options with.
+            abi.encodeWithSelector( // Start: Function to call in the callback.
                 bytes4(
                     keccak256(
-                        bytes(
-                            "flashMintShortOptionsThenSwap(address,uint256,uint256)"
-                        )
+                        bytes("flashMintShortOptionsThenSwap(address,uint256,uint256)")
                     )
-                ), // function to call in this contract
-                optionToken, // option token to mint with flash loaned tokens
-                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
-                maxPremium // total price paid (in underlyingTokens) for selling shortOptionTokens
-            ) // Function to execute in the `uniswapV2Callee` callback.
+                ),
+                optionToken, // Option token to mint with flash loaned tokens.
+                amountOptions, // Quantity of underlyingTokens from flash loan to use to mint options.
+                maxPremium // Total price paid (in underlyingTokens) for selling shortOptionTokens.
+            ) // End: Function to call in the callback.
         );
         return true;
     }
 
     /**
-     * @dev     Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
-     * @notice  IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
+     * @notice  Uses Ether to pay to purchase the option tokens.
+     *          IMPORTANT: amountOutMin parameter is the price to swap shortOptionTokens to underlyingTokens.
      *          IMPORTANT: If the ratio between shortOptionTokens and underlyingTokens is 1:1, then only the swap fee (0.30%) has to be paid.
+     * @dev     Opens a longOptionToken position by minting long + short tokens, then selling the short tokens.
      * @param   optionToken The option address.
      * @param   amountOptions The quantity of longOptionTokens to purchase.
      */
@@ -199,26 +184,25 @@ contract PrimitiveSwaps is
         onlyRegistered(optionToken)
         returns (bool)
     {
-        require(msg.value > 0, "PrimitiveSwaps: ZERO");
-        // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
-        (IUniswapV2Pair pair, address underlying, ) =
-            getOptionPair(optionToken);
+        require(msg.value > 0, "PrimitiveSwaps: ZERO"); // Fail early if no Ether was sent.
+        // Calls pair.swap(), and executes `flashMintShortOptionsThenSwap` in the `uniswapV2Callee` callback.
+        (IUniswapV2Pair pair, address underlying, ) = getOptionPair(optionToken);
         _flashSwap(
-            pair,
-            underlying,
-            amountOptions,
-            abi.encodeWithSelector(
+            pair, // Pair to flash swap from.
+            underlying, // Token to swap to, i.e. receive optimistically.
+            amountOptions, // Amount of underlying to optimistically receive to mint options with.
+            abi.encodeWithSelector( // Start: Function to call in the callback.
                 bytes4(
                     keccak256(
                         bytes(
                             "flashMintShortOptionsThenSwapWithETH(address,uint256,uint256)"
                         )
                     )
-                ), // function to call in this contract
-                optionToken, // option token to mint with flash loaned tokens
-                amountOptions, // quantity of underlyingTokens from flash loan to use to mint options
-                msg.value // total price paid (in underlyingTokens) for selling shortOptionTokens
-            )
+                ),
+                optionToken, // Option token to mint with flash loaned tokens
+                amountOptions, // Quantity of underlyingTokens from flash loan to use to mint options.
+                msg.value // total price paid (in underlyingTokens) for selling shortOptionTokens.
+            ) // End: Function to call in the callback.
         );
         return true;
     }
@@ -235,31 +219,23 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountRedeems,
         uint256 minPayout
-    )
-        external
-        override
-        nonReentrant
-        onlyRegistered(optionToken)
-        returns (bool)
-    {
-        // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
+    ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
+        // Calls pair.swap(), and executes `flashCloseLongOptionsThenSwap` in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
         _flashSwap(
-            pair,
-            redeem,
-            amountRedeems,
-            abi.encodeWithSelector(
+            pair, // Pair to flash swap from.
+            redeem, // Token to swap to, i.e. receive optimistically.
+            amountRedeems, // Amount of underlying to optimistically receive to close options with.
+            abi.encodeWithSelector( // Start: Function to call in the callback.
                 bytes4(
                     keccak256(
-                        bytes(
-                            "flashCloseLongOptionsThenSwap(address,uint256,uint256)"
-                        )
+                        bytes("flashCloseLongOptionsThenSwap(address,uint256,uint256)")
                     )
-                ), // function to call in this contract
-                optionToken, // option token to close with flash loaned redeemTokens
-                amountRedeems, // quantity of redeemTokens from flash loan to use to close options
-                minPayout // total remaining underlyingTokens after flash loan is paid
-            )
+                ),
+                optionToken, // Option token to close with flash loaned redeemTokens.
+                amountRedeems, // Quantity of redeemTokens from flash loan to use to close options.
+                minPayout // Total remaining underlyingTokens after flash loan is paid.
+            ) // End: Function to call in the callback.
         );
         return true;
     }
@@ -276,31 +252,25 @@ contract PrimitiveSwaps is
         IOption optionToken,
         uint256 amountRedeems,
         uint256 minPayout
-    )
-        external
-        override
-        nonReentrant
-        onlyRegistered(optionToken)
-        returns (bool)
-    {
-        // Calls pair.swap(), and executes a fn in the `uniswapV2Callee` callback.
+    ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
+        // Calls pair.swap(), and executes `flashCloseLongOptionsThenSwapForETH` in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
         _flashSwap(
-            pair,
-            redeem,
-            amountRedeems,
-            abi.encodeWithSelector(
+            pair, // Pair to flash swap from.
+            redeem, // Token to swap to, i.e. receive optimistically.
+            amountRedeems, // Amount of underlying to optimistically receive to close options with.
+            abi.encodeWithSelector( // Start: Function to call in the callback.
                 bytes4(
                     keccak256(
                         bytes(
                             "flashCloseLongOptionsThenSwapForETH(address,uint256,uint256)"
                         )
                     )
-                ), // function to call in this contract
-                optionToken, // option token to close with flash loaned redeemTokens
-                amountRedeems, // quantity of redeemTokens from flash loan to use to close options
-                minPayout // total remaining underlyingTokens after flash loan is paid
-            )
+                ),
+                optionToken, // Option token to close with flash loaned redeemTokens.
+                amountRedeems, // Quantity of redeemTokens from flash loan to use to close options.
+                minPayout // Total remaining underlyingTokens after flash loan is paid.
+            ) // End: Function to call in the callback.
         );
         return true;
     }
@@ -313,38 +283,35 @@ contract PrimitiveSwaps is
      * @param   optionAddress The address of the Option contract.
      * @param   quantity The quantity of options to mint using borrowed underlyingTokens.
      * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
-     * @return  success bool Whether the transaction was successful or not.
+     * @return  Returns (amount, premium) of options purchased for total premium price.
      */
     function flashMintShortOptionsThenSwap(
         address optionAddress,
         uint256 quantity,
         uint256 maxPremium
-    )
-        public
-        onlySelf
-        onlyRegistered(IOption(optionAddress))
-        returns (uint256, uint256)
-    {
+    ) public onlySelf onlyRegistered(IOption(optionAddress)) returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
         // Mint option and redeem tokens to this contract.
         _mintOptions(optionToken);
-        // Get the repayment amounts
+        // Get the repayment amounts.
         (uint256 premium, uint256 redeemPremium) =
-            SwapsLib.repayOpen(router, optionToken, quantity);
+            SwapsLib.repayOpen(_router, optionToken, quantity);
         // If premium is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
         if (premium > 0) {
-            // Pull underlyingTokens from the original _msgSender() to pay the remainder of the flash swap.
-            require(maxPremium >= premium, "PrimitiveSwaps: MAX_PREMIUM"); // check for users to not pay over their max desired value.
+            // Check for users to not pay over their max desired value.
+            require(maxPremium >= premium, "PrimitiveSwaps: MAX_PREMIUM");
+            // Pull underlyingTokens from the `getCaller()` to pay the remainder of the flash swap.
             _transferFromCaller(underlying, premium);
+            // Push underlying tokens back to the pair as repayment.
             IERC20(underlying).safeTransfer(address(pair), premium);
         }
-        // Pay pair in redeem
+        // Pay pair in redeem tokens.
         if (redeemPremium > 0) {
             IERC20(redeem).safeTransfer(address(pair), redeemPremium);
         }
-        // Return tokens to original caller
+        // Return tokens to `getCaller()`.
         _transferToCaller(redeem);
         _transferToCaller(optionAddress);
         emit Buy(getCaller(), optionAddress, quantity, premium);
@@ -357,44 +324,38 @@ contract PrimitiveSwaps is
      * @param   optionAddress The address of the Option contract.
      * @param   quantity The quantity of options to mint using borrowed underlyingTokens.
      * @param   maxPremium The maximum quantity of underlyingTokens to pay for the optionTokens.
-     * @return  success bool Whether the transaction was successful or not.
+     * @return  Returns (amount, premium) of options purchased for total premium price.
      */
     function flashMintShortOptionsThenSwapWithETH(
         address optionAddress,
         uint256 quantity,
         uint256 maxPremium
-    )
-        public
-        onlySelf
-        onlyRegistered(IOption(optionAddress))
-        returns (uint256, uint256)
-    {
+    ) public onlySelf onlyRegistered(IOption(optionAddress)) returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
-        require(underlying == address(_weth), "PrimitiveSwaps: NOT_WETH");
-
+        require(underlying == address(_weth), "PrimitiveSwaps: NOT_WETH"); // Ensure Weth Call.
+        // Mint option and redeem tokens to this contract.
         _mintOptions(optionToken);
-
+        // Get the repayment amounts.
         (uint256 premium, uint256 redeemPremium) =
-            SwapsLib.repayOpen(router, optionToken, quantity);
-
+            SwapsLib.repayOpen(_router, optionToken, quantity);
         // If premium is non-zero and non-negative (most cases), send underlyingTokens to the pair as payment (premium).
         if (premium > 0) {
-            // Pull underlyingTokens from the original _msgSender() to pay the remainder of the flash swap.
-            require(maxPremium >= premium, "PrimitiveSwaps: MAX_PREMIUM"); // check for users to not pay over their max desired value.
-            // Wrap ether
+            // Check for users to not pay over their max desired value.
+            require(maxPremium >= premium, "PrimitiveSwaps: MAX_PREMIUM");
+            // Wrap exact Ether amount of `premium`.
             _weth.deposit.value(premium)();
-            // Transfer Weth to pair to pay for premium
+            // Transfer Weth to pair to pay for premium.
             IERC20(address(_weth)).safeTransfer(address(pair), premium);
-            // Return ether to caller.
+            // Return remaining Ether to caller.
             _withdrawETH();
         }
-        // Pay pair in redeem
+        // Pay pair in redeem.
         if (redeemPremium > 0) {
             IERC20(redeem).safeTransfer(address(pair), redeemPremium);
         }
-        // Return tokens to original caller
+        // Return tokens to `getCaller()`.
         _transferToCaller(redeem);
         _transferToCaller(optionAddress);
         return (quantity, premium);
@@ -411,41 +372,28 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 flashLoanQuantity,
         uint256 minPayout
-    )
-        public
-        onlySelf
-        onlyRegistered(IOption(optionAddress))
-        returns (uint256, uint256)
-    {
+    ) public onlySelf onlyRegistered(IOption(optionAddress)) returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
-
+        // Close the options, releasing underlying tokens to this contract.
         _closeOptions(optionToken);
-
+        // Get repay amounts.
         (uint256 payout, uint256 cost, uint256 outstanding) =
-            SwapsLib.repayClose(router, optionToken, flashLoanQuantity);
-
+            SwapsLib.repayClose(_router, optionToken, flashLoanQuantity);
         // Pay back the pair in underlyingTokens.
         if (cost > 0) {
             IERC20(underlying).safeTransfer(address(pair), cost);
         }
-
-        // Pay back the outstanding
         if (outstanding > 0) {
-            // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
+            // Pull underlyingTokens from the `getCaller()` to pay the remainder of the flash swap.
             // Revert if the minPayout is less than or equal to the underlyingPayment of 0.
             // There is 0 underlyingPayment in the case that outstanding > 0.
             // This code branch can be successful by setting `minPayout` to 0.
             // This means the user is willing to pay to close the position.
             require(minPayout <= payout, "PrimitiveSwaps: NEGATIVE_PAYOUT");
-            _transferFromCallerToReceiver(
-                underlying,
-                outstanding,
-                address(pair)
-            );
+            _transferFromCallerToReceiver(underlying, outstanding, address(pair));
         }
-
         // If payout is non-zero and non-negative, send it to the `getCaller()` address.
         if (payout > 0) {
             // Revert if minPayout is greater than the actual payout.
@@ -467,55 +415,49 @@ contract PrimitiveSwaps is
         address optionAddress,
         uint256 flashLoanQuantity,
         uint256 minPayout
-    )
-        public
-        onlySelf
-        onlyRegistered(IOption(optionAddress))
-        returns (uint256, uint256)
-    {
+    ) public onlySelf onlyRegistered(IOption(optionAddress)) returns (uint256, uint256) {
         IOption optionToken = IOption(optionAddress);
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
         require(underlying == address(_weth), "PrimitiveSwaps: NOT_WETH");
-
+        // Close the options, releasing underlying tokens to this contract.
         _closeOptions(optionToken);
-
+        // Get repay amounts.
         (uint256 payout, uint256 cost, uint256 outstanding) =
-            SwapsLib.repayClose(router, optionToken, flashLoanQuantity);
-
+            SwapsLib.repayClose(_router, optionToken, flashLoanQuantity);
         // Pay back the pair in underlyingTokens.
         if (cost > 0) {
             IERC20(underlying).safeTransfer(address(pair), cost);
         }
-
-        // Pay back the outstanding
         if (outstanding > 0) {
-            // Pull underlyingTokens from the original msg.sender to pay the remainder of the flash swap.
+            // Pull underlyingTokens from the `getCaller()` to pay the remainder of the flash swap.
             // Revert if the minPayout is less than or equal to the underlyingPayment of 0.
             // There is 0 underlyingPayment in the case that outstanding > 0.
             // This code branch can be successful by setting `minPayout` to 0.
             // This means the user is willing to pay to close the position.
             require(minPayout <= payout, "PrimitiveSwaps: NEGATIVE_PAYOUT");
-            _transferFromCallerToReceiver(
-                underlying,
-                outstanding,
-                address(pair)
-            );
+            _transferFromCallerToReceiver(underlying, outstanding, address(pair));
         }
-
         // If payout is non-zero and non-negative, send it to the `getCaller()` address.
         if (payout > 0) {
             // Revert if minPayout is greater than the actual payout.
             require(payout >= minPayout, "PrimitiveSwaps: MIN_PREMIUM");
-            _withdrawETH();
+            _withdrawETH(); // Unwrap's this contract's balance of Weth and sends Ether to `getCaller()`.
         }
-
         emit Sell(getCaller(), optionAddress, flashLoanQuantity, payout);
         return (payout, cost);
     }
 
     // ===== Flash Loans =====
 
+    /**
+     * @notice  Passes in `params` to the UniswapV2Pair.swap() function to trigger the callback.
+     * @param   pair The Uniswap Pair to call.
+     * @param   token The token in the Pair to swap to, and thus optimistically receive.
+     * @param   amount The quantity of `token`s to optimistically receive first.
+     * @param   params  The data to call from this contract, using the `uniswapV2Callee` callback.
+     * @return  Whether or not the swap() call suceeded.
+     */
     function _flashSwap(
         IUniswapV2Pair pair,
         address token,
@@ -545,16 +487,15 @@ contract PrimitiveSwaps is
     ) external override(IPrimitiveSwaps, IUniswapV2Callee) {
         assert(
             _msgSender() ==
-                factory.getPair(
+                _factory.getPair(
                     IUniswapV2Pair(_msgSender()).token0(),
                     IUniswapV2Pair(_msgSender()).token1()
                 )
-        ); // ensure that _msgSender() is actually a V2 pair
-        require(sender == address(this), "PrimitiveSwaps: NOT_SENDER"); // ensure called by this contract
-        (bool success, bytes memory returnData) = address(this).call(data);
+        ); // Ensure that _msgSender() is actually a V2 pair.
+        require(sender == address(this), "PrimitiveSwaps: NOT_SENDER"); // Ensure called by this contract.
+        (bool success, bytes memory returnData) = address(this).call(data); // Execute the callback.
         require(
-            success &&
-                (returnData.length == 0 || abi.decode(returnData, (bool))),
+            success && (returnData.length == 0 || abi.decode(returnData, (bool))),
             "PrimitiveSwaps: CALLBACK"
         );
     }
@@ -562,8 +503,22 @@ contract PrimitiveSwaps is
     // ===== View =====
 
     /**
-     * @notice  Input validation that checks the option against Primitive's registry contract.
-     * @dev     Prevents tainted Uniswap pairs that have an evil option as a pair token.
+     * @notice  Gets the UniswapV2Router02 contract address.
+     */
+    function getRouter() public view override returns (IUniswapV2Router02) {
+        return _router;
+    }
+
+    /**
+     * @notice  Gets the UniswapV2Factory contract address.
+     */
+    function getFactory() public view override returns (IUniswapV2Factory) {
+        return _factory;
+    }
+
+    /**
+     * @notice  Fetchs the Uniswap Pair for an option's redeemToken and underlyingToken params.
+     * @param   option The option token to get the corresponding UniswapV2Pair market.
      * @return  The pair address, as well as the tokens of the pair.
      */
     function getOptionPair(IOption option)
@@ -576,40 +531,44 @@ contract PrimitiveSwaps is
             address
         )
     {
-        address redeemToken = option.redeemToken();
-        address underlyingToken = option.getUnderlyingTokenAddress();
-        IUniswapV2Pair pair =
-            IUniswapV2Pair(factory.getPair(redeemToken, underlyingToken));
-        return (pair, underlyingToken, redeemToken);
+        address redeem = option.redeemToken();
+        address underlying = option.getUnderlyingTokenAddress();
+        IUniswapV2Pair pair = IUniswapV2Pair(_factory.getPair(redeem, underlying));
+        return (pair, underlying, redeem);
     }
 
-    function getRouter() public view override returns (IUniswapV2Router02) {
-        return router;
-    }
-
-    function getFactory() public view override returns (IUniswapV2Factory) {
-        return factory;
-    }
-
+    /**
+     * @dev    Calculates the effective premium, denominated in underlyingTokens, to buy `quantity` of `optionToken`s.
+     * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
+     *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
+     *         Buying negative premium options will pay out redeemTokens.
+     *         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
+     *         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
+     * @param  optionToken The optionToken to get the premium cost of purchasing.
+     * @param  quantity The quantity of long option tokens that will be purchased.
+     */
     function getOpenPremium(IOption optionToken, uint256 quantity)
         public
         view
         override
         returns (uint256)
     {
-        (uint256 premium, ) =
-            SwapsLib.getOpenPremium(router, optionToken, quantity);
+        (uint256 premium, ) = SwapsLib.getOpenPremium(_router, optionToken, quantity);
         return premium;
     }
 
+    /**
+     * @dev    Calculates the effective premium, denominated in underlyingTokens, to sell `optionToken`s.
+     * @param  optionToken The optionToken to get the premium cost of purchasing.
+     * @param  quantity The quantity of short option tokens that will be closed.
+     */
     function getClosePremium(IOption optionToken, uint256 quantity)
         public
         view
         override
         returns (uint256)
     {
-        (uint256 payout, ) =
-            SwapsLib.getClosePremium(router, optionToken, quantity);
+        (uint256 payout, ) = SwapsLib.getClosePremium(_router, optionToken, quantity);
         return payout;
     }
 }

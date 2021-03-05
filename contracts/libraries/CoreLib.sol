@@ -22,50 +22,45 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   Library for Core Logic for Primitive Option tokens.
- * @notice  Primitive Swaps Lib - @primitivefi/v1-connectors@2.0.0
+ * @title   Primitive Swaps Lib
  * @author  Primitive
+ * @notice  Library for calculating different proportions of long and short option tokens.
+ * @dev     @primitivefi/v1-connectors@2.0.0
  */
 
-// Primitive
-import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol";
-// Open Zeppelin
+import {IOption} from "@primitivefi/contracts/contracts/option/interfaces/ITrader.sol";
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 
 library CoreLib {
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
     /**
-     * @dev    Calculates the proportional quantity of long option tokens per short option token.
-     * @notice For each long option token, there is quoteValue / baseValue quantity of short option tokens.
+     * @dev     Calculates the proportional quantity of long option tokens per short option token.
+     * @notice  For each long option token, there is quoteValue / baseValue quantity of short option tokens.
+     * @param   optionToken The Option to use to calculate proportional amounts. Each option has different proportions.
+     * @param   short The amount of short options used to calculate the proportional amount of long option tokens.
+     * @return  The proportional amount of long option tokens based on `short`.
      */
-    function getProportionalLongOptions(
-        IOption optionToken,
-        uint256 quantityShort
-    ) internal view returns (uint256) {
-        uint256 quantityLong =
-            quantityShort.mul(optionToken.getBaseValue()).div(
-                optionToken.getQuoteValue()
-            );
-
-        return quantityLong;
+    function getProportionalLongOptions(IOption optionToken, uint256 short)
+        internal
+        view
+        returns (uint256)
+    {
+        return short.mul(optionToken.getBaseValue()).div(optionToken.getQuoteValue());
     }
 
     /**
-     * @dev    Calculates the proportional quantity of short option tokens per long option token.
-     * @notice For each short option token, there is baseValue / quoteValue quantity of long option tokens.
+     * @dev     Calculates the proportional quantity of short option tokens per long option token.
+     * @notice  For each short option token, there is baseValue / quoteValue quantity of long option tokens.
+     * @param   optionToken The Option to use to calculate proportional amounts. Each option has different proportions.
+     * @param   long The amount of long options used to calculate the proportional amount of short option tokens.
+     * @return  The proportional amount of short option tokens based on `long`.
      */
-    function getProportionalShortOptions(
-        IOption optionToken,
-        uint256 quantityLong
-    ) internal view returns (uint256) {
-        uint256 quantityShort =
-            quantityLong.mul(optionToken.getQuoteValue()).div(
-                optionToken.getBaseValue()
-            );
-
-        return quantityShort;
+    function getProportionalShortOptions(IOption optionToken, uint256 long)
+        internal
+        view
+        returns (uint256)
+    {
+        return long.mul(optionToken.getQuoteValue()).div(optionToken.getBaseValue());
     }
 }

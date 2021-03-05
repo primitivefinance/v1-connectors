@@ -1,10 +1,35 @@
 // SPDX-License-Identifier: MIT
+// Copyright 2021 Primitive Finance
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 pragma solidity ^0.6.2;
 
+/**
+ * @title   TestERC20
+ * @author  Primitive
+ * @notice  An opinionated ERC20 with `permit` to use ONLY for testing.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
+ */
+
 import {IERC20Permit} from "../interfaces/IERC20Permit.sol";
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
-import "hardhat/console.sol";
 
 contract TestERC20 {
     using SafeMath for uint256;
@@ -22,11 +47,7 @@ contract TestERC20 {
     bytes32 public constant PERMIT_TYPEHASH =
         0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
 
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
+    event Approval(address indexed owner, address indexed spender, uint256 value);
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     constructor(
@@ -113,9 +134,7 @@ contract TestERC20 {
         uint256 value
     ) external returns (bool) {
         if (allowance[from][msg.sender] != uint256(-1)) {
-            allowance[from][msg.sender] = allowance[from][msg.sender].sub(
-                value
-            );
+            allowance[from][msg.sender] = allowance[from][msg.sender].sub(value);
         }
         _transfer(from, to, value);
         return true;

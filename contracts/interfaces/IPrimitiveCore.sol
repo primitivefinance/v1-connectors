@@ -21,12 +21,12 @@
 
 pragma solidity ^0.6.2;
 
-import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
+import {IOption} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 import {IERC20Permit} from "./IERC20Permit.sol";
 
 interface IPrimitiveCore {
+    // ===== External =====
+
     function safeMintWithETH(IOption optionToken)
         external
         payable

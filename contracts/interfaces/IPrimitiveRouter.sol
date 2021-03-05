@@ -22,24 +22,32 @@
 pragma solidity ^0.6.2;
 
 import {
-    IUniswapV2Router02
-} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import {
-    IUniswapV2Factory
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import {
     IOption,
     IERC20
 } from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
+import {
+    IRegistry
+} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
+import {IWETH} from "./IWETH.sol";
 
 interface IPrimitiveRouter {
-    function executeCall(address connector, bytes calldata params)
-        external
-        payable;
+    // ===== Admin =====
 
-    function transferFromCaller(address token, uint256 amount)
+    function halt() external;
+
+    // ===== Registration =====
+    function setRegisteredOptions(address[] calldata optionAddresses)
         external
         returns (bool);
+
+    function setRegisteredConnectors(
+        address[] calldata connectors,
+        bool[] calldata isValid
+    ) external returns (bool);
+
+    // ===== Operations =====
+
+    function transferFromCaller(address token, uint256 amount) external returns (bool);
 
     function transferFromCallerToReceiver(
         address token,
@@ -47,19 +55,23 @@ interface IPrimitiveRouter {
         address receiver
     ) external returns (bool);
 
-    function validateOption(address option) external returns (bool);
+    // ===== Execution =====
 
-    function init(
-        address core,
-        address liquidity,
-        address swaps
-    ) external returns (bool);
+    function executeCall(address connector, bytes calldata params) external payable;
 
     // ==== View ====
+
+    function getWeth() external view returns (IWETH);
 
     function getRoute() external view returns (address);
 
     function getCaller() external view returns (address);
 
-    function validOptions(address option) external view returns (bool);
+    function getRegistry() external view returns (IRegistry);
+
+    function getRegisteredOption(address option) external view returns (bool);
+
+    function getRegisteredConnector(address connector) external view returns (bool);
+
+    function apiVersion() external pure returns (string memory);
 }

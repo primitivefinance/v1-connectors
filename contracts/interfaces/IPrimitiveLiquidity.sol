@@ -27,16 +27,12 @@ import {
 import {
     IUniswapV2Factory
 } from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import {
-    IUniswapV2Pair
-} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
-import {
-    IOption
-} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
+import {IUniswapV2Pair} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+import {IOption} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 import {IERC20Permit} from "./IERC20Permit.sol";
 
 interface IPrimitiveLiquidity {
-    // ==== Liquidity Functions ====
+    // ==== External ====
 
     function addShortLiquidityWithUnderlying(
         address optionAddress,

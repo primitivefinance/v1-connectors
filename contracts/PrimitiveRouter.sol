@@ -22,78 +22,71 @@
 pragma solidity ^0.6.2;
 
 /**
- * @title   The execution entry point for using Primitive Connector contracts.
- * @notice  Primitive Router - @primitivefi/v1-connectors@v2.0.0
+ * @title   Primitive Router
  * @author  Primitive
+ * @notice  Contract to execute Primitive Connector functions.
+ * @dev     @primitivefi/v1-connectors@v2.0.0
  */
 
 // Open Zeppelin
-import {Context} from "@openzeppelin/contracts/GSN/Context.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IWETH} from "./interfaces/IWETH.sol";
-import {
-    IRegistry
-} from "@primitivefi/contracts/contracts/option/interfaces/IRegistry.sol";
-import {
     IPrimitiveRouter,
-    IUniswapV2Router02,
-    IUniswapV2Factory,
+    IRegistry,
     IOption,
-    IERC20
+    IERC20,
+    IWETH
 } from "./interfaces/IPrimitiveRouter.sol";
 
+/**
+ * @notice  Used to execute calls on behalf of the Router contract.
+ * @dev     Changes `msg.sender` context so the Router is not `msg.sender`.
+ */
 contract Route {
-    function executeCall(address target, bytes calldata params)
-        external
-        payable
-    {
-        (bool success, bytes memory returnData) =
-            target.call.value(msg.value)(params);
+    function executeCall(address target, bytes calldata params) external payable {
+        (bool success, bytes memory returnData) = target.call.value(msg.value)(params);
         require(success, "Route: EXECUTION_FAIL");
     }
 }
 
-contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
-    using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data
-    using SafeMath for uint256; // Reverts on math underflows/overflows
+contract PrimitiveRouter is IPrimitiveRouter, Ownable, Pausable, ReentrancyGuard {
+    using SafeERC20 for IERC20; // Reverts when `transfer` or `transferFrom` erc20 calls don't return proper data.
+    using SafeMath for uint256; // Reverts on math underflows/overflows.
 
-    // fix for testing
-    IUniswapV2Factory public factory =
-        IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f); // The Uniswap V2 factory contract to get pair addresses from
-    IUniswapV2Router02 public router;
+    // Constants
+    address private constant _NO_CALLER = address(0x0); // Default state for `_CALLER`.
 
-    IWETH public weth;
-    IRegistry public registry;
-
-    address public deployer;
-
-    mapping(address => bool) public validConnectors;
-    bool public initialized;
-    bool public _halt;
-
-    mapping(address => bool) internal _validOptions;
-
+    // Events
     event Initialized(address indexed from); // Emmitted on deployment
     event Executed(address indexed from, address indexed to, bytes params);
+    event RegisteredOptions(address[] indexed options);
+    event RegisteredConnectors(address[] indexed connectors, bool[] registered);
 
-    address internal constant _NO_CALLER = address(0x0);
-    /**
-     * @dev If the `execute` function was called this block.
-     */
-    bool private _EXECUTING;
-    /**
-     * @dev If _EXECUTING, the orginal `_msgSender()` of the execute call.
-     */
-    address internal _CALLER = _NO_CALLER;
+    // State variables
+    IRegistry private _registry; // The Primitive Registry which deploys Option clones.
+    IWETH private _weth; // Canonical WETH9
+    Route private _route; // Intermediary to do connector.call() from.
+    address private _CONNECTOR = _NO_CALLER; // If _EXECUTING, the `connector` of the execute call param.
+    address private _CALLER = _NO_CALLER; // If _EXECUTING, the orginal `_msgSender()` of the execute call.
+    bool private _EXECUTING; // True if the `executeCall` function was called.
+
+    // Whitelisted mappings
+    mapping(address => bool) private _registeredConnectors;
+    mapping(address => bool) private _registeredOptions;
 
     /**
      * @notice  A mutex to use during an `execute` call.
+     * @dev     Checks to make sure the `_CONNECTOR` in state is the `msg.sender`.
+     *          Checks to make sure a `_CALLER` was set.
+     *          Fails if this modifier is triggered by an external call.
+     *          Fails if this modifier is triggered by calling a function without going through `executeCall`.
      */
     modifier isExec() {
+        require(_CONNECTOR == _msgSender(), "Router: NOT_CONNECTOR");
         require(_CALLER != _NO_CALLER, "Router: NO_CALLER");
         require(!_EXECUTING, "Router: IN_EXECUTION");
         _EXECUTING = true;
@@ -101,68 +94,83 @@ contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
         _EXECUTING = false;
     }
 
-    modifier notHalted() {
-        require(_halt == false, "CONTRACT_HALTED");
-        _;
-    }
-
-    Route internal _route;
-
     // ===== Constructor =====
 
     constructor(address weth_, address registry_) public {
-        require(address(weth) == address(0x0), "INIT");
-        deployer = _msgSender();
-        weth = IWETH(weth_);
-        registry = IRegistry(registry_);
+        require(address(_weth) == address(0x0), "Router: INITIALIZED");
         _route = new Route();
+        _weth = IWETH(weth_);
+        _registry = IRegistry(registry_);
         emit Initialized(_msgSender());
     }
 
+    // ===== Pausability =====
+
     /**
-     * @notice  Initialize router with its valid connectors.
-     * @notice  Can only be called once, while initialized == false.
-     * @param   core The address of PrimitiveCore.sol
-     * @param   liquidity The address of PrimitiveLiquidity.sol
-     * @param   swaps The address of PrimitiveSwaps.sol
+     * @notice  Halts use of `executeCall`, and other functions that change state.
      */
-    function init(
-        address core,
-        address liquidity,
-        address swaps
-    ) external override notHalted nonReentrant returns (bool) {
-        require(initialized == false, "ALREADY_INITIALIZED");
-        initialized = true;
-        validConnectors[core] = true;
-        validConnectors[liquidity] = true;
-        validConnectors[swaps] = true;
+    function halt() external override onlyOwner {
+        if (paused()) {
+            _unpause();
+        } else {
+            _pause();
+        }
+    }
+
+    // ===== Registration =====
+
+    /**
+     * @notice  Checks option against Primitive Registry. If from Registry, registers as true.
+     *          NOTE: Purposefully does not have `onlyOwner` modifier.
+     * @dev     Sets `optionAddresses` to true in the whitelisted options mapping, if from Registry.
+     * @param   optionAddresses The array of option addresses to update.
+     */
+    function setRegisteredOptions(address[] calldata optionAddresses)
+        external
+        override
+        returns (bool)
+    {
+        uint256 len = optionAddresses.length;
+        for (uint256 i = 0; i < len; i++) {
+            address option = optionAddresses[i];
+            require(isFromPrimitiveRegistry(IOption(option)), "Router: EVIL_OPTION");
+            _registeredOptions[option] = true;
+        }
+        emit RegisteredOptions(optionAddresses);
         return true;
     }
 
-    function halt() external {
-        require(deployer == _msgSender(), "NOT_DEPLOYER");
-        _halt = true;
-    }
-
-    function validateOption(address option)
-        external
+    /**
+     * @notice  Allows the `owner` to set whitelisted connector contracts.
+     * @dev     Sets `connectors` to `isValid` in the whitelisted connectors mapping.
+     * @param   connectors The array of option addresses to update.
+     * @param   isValid Whether or not the optionAddress is registered.
+     */
+    function setRegisteredConnectors(address[] memory connectors, bool[] memory isValid)
+        public
         override
-        notHalted
+        onlyOwner
         returns (bool)
     {
-        IOption _option = IOption(option);
-        require(isRegistered(_option), "EVIL_OPTION");
-        _validOptions[option] = true;
+        uint256 len = connectors.length;
+        require(len == isValid.length, "Router: LENGTHS");
+        for (uint256 i = 0; i < len; i++) {
+            address connector = connectors[i];
+            bool status = isValid[i];
+            _registeredConnectors[connector] = status;
+        }
+        emit RegisteredConnectors(connectors, isValid);
         return true;
     }
 
     /**
      * @notice  Checks an option against the Primitive Registry.
+     * @param   option The IOption token to check.
      * @return  Whether or not the option was deployed from the Primitive Registry.
      */
-    function isRegistered(IOption option) internal view returns (bool) {
+    function isFromPrimitiveRegistry(IOption option) internal view returns (bool) {
         return (address(option) ==
-            registry.getOptionAddress(
+            _registry.getOptionAddress(
                 option.getUnderlyingTokenAddress(),
                 option.getStrikeTokenAddress(),
                 option.getBaseValue(),
@@ -184,7 +192,7 @@ contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
         public
         override
         isExec
-        notHalted
+        whenNotPaused
         returns (bool)
     {
         IERC20(token).safeTransferFrom(
@@ -205,7 +213,7 @@ contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
         address token,
         uint256 amount,
         address receiver
-    ) public override isExec notHalted returns (bool) {
+    ) public override isExec whenNotPaused returns (bool) {
         IERC20(token).safeTransferFrom(
             getCaller(), // Account to pull from
             receiver,
@@ -216,41 +224,90 @@ contract PrimitiveRouter is IPrimitiveRouter, ReentrancyGuard, Context {
 
     // ===== Execute =====
 
+    /**
+     * @notice  Executes a call with `params` to the target `connector` contract from `_route`.
+     * @param   connector The Primitive Connector module to call.
+     * @param   params The encoded function data to use.
+     */
     function executeCall(address connector, bytes calldata params)
         external
         payable
         override
-        notHalted
+        whenNotPaused
     {
-        require(validConnectors[connector], "INVALID_CONNECTOR");
+        require(_registeredConnectors[connector], "Router: INVALID_CONNECTOR");
         _CALLER = _msgSender();
+        _CONNECTOR = connector;
         _route.executeCall.value(msg.value)(connector, params);
         _CALLER = _NO_CALLER;
+        _CONNECTOR = _NO_CALLER;
         emit Executed(_msgSender(), connector, params);
     }
 
     // ===== Fallback =====
 
-    receive() external payable notHalted {
-        assert(_msgSender() == address(weth)); // only accept ETH via fallback from the WETH contract
+    receive() external payable whenNotPaused {
+        assert(_msgSender() == address(_weth)); // only accept ETH via fallback from the WETH contract
     }
 
-    // ===== Execution Context =====
+    // ===== View =====
 
+    /**
+     * @notice  Returns the IWETH contract address.
+     */
+    function getWeth() public view override returns (IWETH) {
+        return _weth;
+    }
+
+    /**
+     * @notice  Returns the Route contract which executes functions on behalf of this contract.
+     */
     function getRoute() public view override returns (address) {
         return address(_route);
     }
 
+    /**
+     * @notice  Returns the `_CALLER` which is set to `_msgSender()` during an `executeCall` invocation.
+     */
     function getCaller() public view override returns (address) {
         return _CALLER;
     }
 
-    function validOptions(address option)
+    /**
+     * @notice  Returns the Primitive Registry contract address.
+     */
+    function getRegistry() public view override returns (IRegistry) {
+        return _registry;
+    }
+
+    /**
+     * @notice  Returns a bool if `option` is registered or not.
+     * @param   option The address of the Option to check if registered.
+     */
+    function getRegisteredOption(address option) external view override returns (bool) {
+        return _registeredOptions[option];
+    }
+
+    /**
+     * @notice  Returns a bool if `connector` is registered or not.
+     * @param   connector The address of the Connector contract to check if registered.
+     */
+    function getRegisteredConnector(address connector)
         external
         view
         override
         returns (bool)
     {
-        return _validOptions[option];
+        return _registeredConnectors[connector];
+    }
+
+    /**
+     * @notice  Returns the NPM package version and github version of this contract.
+     * @dev     For the npm package: @primitivefi/v1-connectors
+     *          For the repository: github.com/primitivefinance/primitive-v1-connectors
+     * @return  The apiVersion string.
+     */
+    function apiVersion() public pure override returns (string memory) {
+        return "2.0.0";
     }
 }

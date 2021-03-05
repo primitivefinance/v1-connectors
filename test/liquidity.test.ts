@@ -197,8 +197,11 @@ describe('PrimitiveLiquidity', function () {
       from: signers[0],
       args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
     })
-    await primitiveRouter.init(connector.address, connector.address, connector.address)
-    await primitiveRouter.validateOption(optionToken.address)
+    await primitiveRouter.setRegisteredConnectors(
+      [connector.address, connector.address, connector.address],
+      [true, true, true]
+    )
+    await primitiveRouter.setRegisteredOptions([optionToken.address])
 
     // Approve all tokens and contracts
     await batchApproval(
@@ -266,8 +269,11 @@ describe('PrimitiveLiquidity', function () {
         from: signers[0],
         args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
       })
-      await primitiveRouter.init(connector.address, connector.address, connector.address)
-      await primitiveRouter.validateOption(optionToken.address)
+      await primitiveRouter.setRegisteredConnectors(
+        [connector.address, connector.address, connector.address],
+        [true, true, true]
+      )
+      await primitiveRouter.setRegisteredOptions([optionToken.address])
 
       // Approve all tokens and contracts
       await batchApproval(
@@ -475,8 +481,8 @@ describe('PrimitiveLiquidity', function () {
         from: Admin,
         args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
       })
-      await primitiveRouter.init(connector.address, connector.address, connector.address)
-      await primitiveRouter.validateOption(optionToken.address)
+      await primitiveRouter.setRegisteredConnectors([connector.address], [true])
+      await primitiveRouter.setRegisteredOptions([optionToken.address])
 
       // Approve all tokens and contracts
       await batchApproval(
@@ -591,8 +597,11 @@ describe('PrimitiveLiquidity', function () {
         from: signers[0],
         args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
       })
-      await primitiveRouter.init(connector.address, connector.address, connector.address)
-      await primitiveRouter.validateOption(optionToken.address)
+      await primitiveRouter.setRegisteredConnectors(
+        [connector.address, connector.address, connector.address],
+        [true, true, true]
+      )
+      await primitiveRouter.setRegisteredOptions([optionToken.address])
 
       // Approve all tokens and contracts
       await batchApproval(
@@ -694,8 +703,11 @@ describe('PrimitiveLiquidity', function () {
         from: Admin,
         args: [weth.address, primitiveRouter.address, uniswapFactory.address, uniswapRouter.address],
       })
-      await primitiveRouter.init(connector.address, connector.address, connector.address)
-      await primitiveRouter.validateOption(optionToken.address)
+      await primitiveRouter.setRegisteredConnectors(
+        [connector.address, connector.address, connector.address],
+        [true, true, true]
+      )
+      await primitiveRouter.setRegisteredOptions([optionToken.address])
 
       // Approve all tokens and contracts
       await batchApproval(
