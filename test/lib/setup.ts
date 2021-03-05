@@ -21,11 +21,11 @@ import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/Pr
 import constants from './constants'
 const { deployContract, link } = waffle
 const { MILLION_ETHER } = constants.VALUES
-const { OPTION_TEMPLATE_LIB, REDEEM_TEMPLATE_LIB } = constants.LIBRARIES
 
 // Uniswap related build and addresses
 import UniswapV2Router02 from '@uniswap/v2-periphery/build/UniswapV2Router02.json'
 import UniswapV2Factory from '@uniswap/v2-core/build/UniswapV2Factory.json'
+const { OPTION_TEMPLATE_LIB, REDEEM_TEMPLATE_LIB } = constants.LIBRARIES
 const { RINKEBY_UNI_ROUTER02, RINKEBY_UNI_FACTORY } = constants.ADDRESSES
 
 /**

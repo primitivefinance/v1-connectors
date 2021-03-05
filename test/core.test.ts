@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 import chai, { expect } from 'chai'
-import { solidity } from 'ethereum-waffle'
+import { solidity, MockProvider } from 'ethereum-waffle'
 chai.use(solidity)
 import { BigNumber, BigNumberish, Contract, Wallet } from 'ethers'
 import { parseEther, formatEther } from 'ethers/lib/utils'
@@ -67,14 +67,14 @@ describe('PrimitiveCore', function () {
 
     // 5. deploy connector
     connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
-    await router.init(connector.address, AddressZero, AddressZero)
+    await router.setRegisteredConnectors([connector.address, AddressZero, AddressZero], [true, true, true])
 
     // Option and Redeem token instances for parameters
     Primitive = await setup.newPrimitive(signer, registry, baseToken, quoteToken, base, quote, expiry)
 
     // Long and short tokens
     optionToken = Primitive.optionToken
-    await router.validateOption(optionToken.address)
+    await router.setRegisteredOptions([optionToken.address])
     redeemToken = Primitive.redeemToken
 
     let contractNames: string[] = ['Router']
@@ -326,8 +326,8 @@ describe('PrimitiveCore', function () {
       // Deploy a new router & connector instance
       router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
       connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
-      await router.init(connector.address, AddressZero, AddressZero)
-      await router.validateOption(optionToken.address)
+      await router.setRegisteredConnectors([connector.address, AddressZero, AddressZero], [true, true, true])
+      await router.setRegisteredOptions([optionToken.address])
       // Approve the tokens that are being used
       await baseToken.approve(router.address, MILLION_ETHER)
       await quoteToken.approve(router.address, MILLION_ETHER)
@@ -380,8 +380,8 @@ describe('PrimitiveCore', function () {
       // Deploy a new router instance
       router = await setup.newTestRouter(signer, [weth.address, weth.address, weth.address, registry.address])
       connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
-      await router.init(connector.address, AddressZero, AddressZero)
-      await router.validateOption(optionToken.address)
+      await router.setRegisteredConnectors([connector.address, AddressZero, AddressZero], [true, true, true])
+      await router.setRegisteredOptions([optionToken.address])
 
       // Approve tokens for router to use
       await weth.approve(router.address, MILLION_ETHER)
@@ -491,13 +491,14 @@ describe('PrimitiveCore', function () {
 
   describe('safeMintWithPermit()', function () {
     before(async function () {
-      const provider = waffle.provider
+      const chainId = await signer.getChainId()
+      const provider = +chainId === 1337 ? waffle.provider : new MockProvider()
       ;[wallet] = provider.getWallets()
       // Deploy a new router instance
       router = await setup.newTestRouter(wallet, [weth.address, weth.address, weth.address, registry.address])
       connector = await setup.newCoreConnector(wallet, [weth.address, router.address])
-      await router.init(connector.address, AddressZero, AddressZero)
-      await router.validateOption(optionToken.address)
+      await router.setRegisteredConnectors([connector.address, AddressZero, AddressZero], [true, true, true])
+      await router.setRegisteredOptions([optionToken.address])
       // Approve tokens for router to use
       await weth.approve(router.address, MILLION_ETHER)
       await optionToken.approve(router.address, MILLION_ETHER)

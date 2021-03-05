@@ -1,5 +1,5 @@
 import chai, { assert, expect } from 'chai'
-import { solidity } from 'ethereum-waffle'
+import { solidity, MockProvider } from 'ethereum-waffle'
 chai.use(solidity)
 import * as utils from './lib/utils'
 import * as setup from './lib/setup'
@@ -494,7 +494,8 @@ describe('Swaps', function () {
 
   describe('openFlashLongWithPermit()', function () {
     before(async function () {
-      const provider = waffle.provider
+      const chainId = await Admin.getChainId()
+      const provider = +chainId === 1337 ? waffle.provider : new MockProvider()
       ;[wallet] = provider.getWallets()
       // Administrative contract instances
       registry = await setup.newRegistry(Admin)

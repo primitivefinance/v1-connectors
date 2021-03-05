@@ -17,7 +17,15 @@ const { assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 
 const { ONE_ETHER, FIVE_ETHER, TEN_ETHER, THOUSAND_ETHER, MILLION_ETHER } = constants.VALUES
 
-const { ERR_ZERO, ERR_BAL_STRIKE, ERR_NOT_EXPIRED, ERC20_TRANSFER_AMOUNT, FAIL } = constants.ERR_CODES
+const {
+  ERR_ZERO,
+  ERR_BAL_STRIKE,
+  ERR_NOT_EXPIRED,
+  ERC20_TRANSFER_AMOUNT,
+  FAIL,
+  ERR_PAUSED,
+  ERR_OWNABLE,
+} = constants.ERR_CODES
 
 describe('Router', function () {
   let signers: SignerWithAddress[]
@@ -80,7 +88,7 @@ describe('Router', function () {
       args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
     })
 
-    await router.init(connector.address, liquidity.address, swaps.address)
+    await router.setRegisteredConnectors([connector.address, liquidity.address, swaps.address], [true, true, true])
 
     // Option and Redeem token instances for parameters
     Primitive = await setup.newPrimitive(signer, registry, baseToken, quoteToken, base, quote, expiry)
@@ -209,7 +217,7 @@ describe('Router', function () {
         from: signers[0],
         args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
       })
-      await router.init(connector.address, liquidity.address, swaps.address)
+      await router.setRegisteredConnectors([connector.address, liquidity.address, swaps.address], [true, true, true])
       // Approve the tokens that are being used
       await baseToken.approve(router.address, MILLION_ETHER)
       await quoteToken.approve(router.address, MILLION_ETHER)
@@ -226,11 +234,11 @@ describe('Router', function () {
         router.executeCall(connector.address, mintparams, {
           value: inputUnderlyings,
         })
-      ).to.be.revertedWith('CONTRACT_HALTED')
+      ).to.be.revertedWith(ERR_PAUSED)
     })
 
     it('Only deployer can halt', async () => {
-      await expect(router.connect(signers[2]).halt()).to.be.revertedWith('NOT_DEPLOYER')
+      await expect(router.connect(signers[2]).halt()).to.be.revertedWith(ERR_OWNABLE)
     })
   })
 })

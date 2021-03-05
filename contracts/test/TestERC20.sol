@@ -62,7 +62,6 @@ contract TestERC20 {
         assembly {
             chainId := chainid()
         }
-        console.log(chainId, name_);
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256(
