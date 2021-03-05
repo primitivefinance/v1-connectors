@@ -506,6 +506,20 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     // ===== View =====
 
     /**
+     * @notice  Gets the UniswapV2Router02 contract address.
+     */
+    function getRouter() public view override returns (IUniswapV2Router02) {
+        return _router;
+    }
+
+    /**
+     * @notice  Gets the UniswapV2Factory contract address.
+     */
+    function getFactory() public view override returns (IUniswapV2Factory) {
+        return _factory;
+    }
+
+    /**
      * @notice  Fetchs the Uniswap Pair for an option's redeemToken and underlyingToken params.
      * @param   option The option token to get the corresponding UniswapV2Pair market.
      * @return  The pair address, as well as the tokens of the pair.
@@ -524,19 +538,5 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         address underlying = option.getUnderlyingTokenAddress();
         IUniswapV2Pair pair = IUniswapV2Pair(_factory.getPair(redeem, underlying));
         return (pair, underlying, redeem);
-    }
-
-    /**
-     * @notice  Gets the UniswapV2Router02 contract address.
-     */
-    function getRouter() public view override returns (IUniswapV2Router02) {
-        return _router;
-    }
-
-    /**
-     * @notice  Gets the UniswapV2Factory contract address.
-     */
-    function getFactory() public view override returns (IUniswapV2Factory) {
-        return _factory;
     }
 }
