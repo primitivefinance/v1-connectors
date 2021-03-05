@@ -156,7 +156,7 @@ contract PrimitiveRouter is IPrimitiveRouter, Ownable, Pausable, ReentrancyGuard
         for (uint256 i = 0; i < len; i++) {
             address connector = connectors[i];
             bool status = isValid[i];
-            _registeredOptions[connector] = isValid[i];
+            _registeredConnectors[connector] = status;
         }
         emit RegisteredConnectors(connectors, isValid);
         return true;
