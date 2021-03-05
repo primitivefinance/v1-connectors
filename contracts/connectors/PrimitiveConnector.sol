@@ -186,7 +186,7 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
      * @notice  Uses this contract's balance of underlyingTokens to mint optionTokens to `receiver`.
      * @param   optionToken The Primitive Option to mint.
      * @param   receiver The address that will received the minted long and short optionTokens.
-     * @return  (uint, uint) (longOptions, shortOptions)
+     * @return  (uint, uint) Returns the (long, short) option tokens minted
      */
     function _mintOptionsToReceiver(IOption optionToken, address receiver)
         internal
@@ -201,7 +201,7 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
      * @notice  Pulls underlying tokens from `getCaller()` to option contract, then invokes mintOptions().
      * @param   optionToken The option token to mint.
      * @param   quantity The amount of option tokens to mint.
-     * @return  Returns (uint, uint) (longOptions, shortOptions)
+     * @return  (uint, uint) Returns the (long, short) option tokens minted
      */
     function _mintOptionsFromCaller(IOption optionToken, uint256 quantity)
         internal
