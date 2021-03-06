@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-wit
 import chai, { expect } from 'chai'
 import { solidity } from 'ethereum-waffle'
 chai.use(solidity)
-import { BigNumber, BigNumberish, Contract } from 'ethers'
+import { BigNumber, BigNumberish, Contract, Wallet } from 'ethers'
 import { parseEther, formatEther } from 'ethers/lib/utils'
 import { ethers, waffle } from 'hardhat'
 import { deploy, deployTokens, deployWeth, batchApproval, tokenFromAddress } from './lib/erc20'
@@ -26,219 +26,114 @@ const {
   ERR_PAUSED,
   ERR_OWNABLE,
 } = constants.ERR_CODES
+const { createFixtureLoader } = waffle
+import { primitiveV1, OptionParameters, PrimitiveV1Fixture, Options } from './lib/fixtures'
 
 describe('Router', function () {
   let signers: SignerWithAddress[]
   let weth: Contract
   let router: Contract, connector: Contract, liquidity: Contract, swaps: Contract
-  let signer: SignerWithAddress
+  let Admin: Wallet, User: Wallet, Bob: string, trader: Contract
   let Alice: string
   let tokens: Contract[], comp: Contract, dai: Contract
   let core: Contract
-  let baseToken, quoteToken, base, quote, expiry
+  let underlyingToken, strikeToken, base, quote, expiry
   let factory: Contract, registry: Contract
   let Primitive: any
   let optionToken: Contract, redeemToken: Contract
-  let safeMintWithETH, safeExerciseWithETH, safeExerciseForETH, safeRedeemForETH, safeCloseForETH
-  let params, uniswapRouter, uniswapFactory
+  let uniswapRouter, uniswapFactory
 
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 
-  const venueDeposit = (connector: Contract, receiver: string, oid: string) => {
-    let amount: BigNumber = parseEther('1')
-    let params: any = connector.interface.encodeFunctionData('deposit', [oid, amount, receiver])
-    return router.execute(0, connector.address, params)
-  }
+  let wallet: Wallet, wallet1: Wallet, fixture: PrimitiveV1Fixture
+  let params: OptionParameters, options: Options
+  ;[wallet, wallet1] = waffle.provider.getWallets()
+  const loadFixture = createFixtureLoader([wallet], waffle.provider)
 
-  before(async function () {
-    signers = await ethers.getSigners()
-    signer = signers[0]
-    Alice = signer.address
+  beforeEach(async function () {
+    Admin = wallet
+    User = wallet1
+    Alice = Admin.address
+    Bob = User.address
 
-    // 1. Administrative contract instances
-    registry = await setup.newRegistry(signer)
-
-    // 2. get weth, erc-20 tokens, and wrapped tokens
-    weth = await deployWeth(signer)
-    tokens = await deployTokens(signer, 2, ['comp', 'dai'])
-    ;[comp, dai] = tokens
-    const uniswap = await setup.newUniswap(signer, Alice, weth)
-    uniswapFactory = uniswap.uniswapFactory
-    uniswapRouter = uniswap.uniswapRouter
-    await uniswapFactory.setFeeTo(Alice)
-
-    // 3. select option params
-    baseToken = weth
-    quoteToken = dai
-    base = parseEther('1')
-    quote = parseEther('1000')
-    expiry = 1615190111
-
-    // 4. deploy router
-    router = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
-
-    // 5. deploy connector
-    connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
-    liquidity = await deploy('PrimitiveLiquidity', {
-      from: signers[0],
-      args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
-    })
-    swaps = await deploy('PrimitiveSwaps', {
-      from: signers[0],
-      args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
-    })
-
-    await router.setRegisteredConnectors([connector.address, liquidity.address, swaps.address], [true, true, true])
-
-    // Option and Redeem token instances for parameters
-    Primitive = await setup.newPrimitive(signer, registry, baseToken, quoteToken, base, quote, expiry)
-
-    // Long and short tokens
-    optionToken = Primitive.optionToken
-    redeemToken = Primitive.redeemToken
-
-    let contractNames: string[] = ['Router']
-    let contracts: Contract[] = [router]
-    let addresses: string[] = [signer.address]
-    let addressNamesArray: string[] = ['Alice']
-    tokens.push(optionToken)
-    tokens.push(redeemToken)
-    //await generateReport(contractNames, contracts, tokens, addresses, addressNamesArray)
-
-    await baseToken.approve(router.address, ethers.constants.MaxUint256)
-    await quoteToken.approve(router.address, ethers.constants.MaxUint256)
-    await optionToken.approve(router.address, MILLION_ETHER)
-    await redeemToken.approve(router.address, MILLION_ETHER)
-    await optionToken.connect(signers[1]).approve(router.address, MILLION_ETHER)
-    await redeemToken.connect(signers[1]).approve(router.address, MILLION_ETHER)
+    fixture = await loadFixture(primitiveV1)
+    weth = fixture.weth
+    trader = fixture.trader
+    params = fixture.params
+    options = fixture.options
+    base = fixture.params.base
+    registry = fixture.registry
+    quote = fixture.params.quote
+    connector = fixture.core // core!!
+    expiry = fixture.params.expiry
+    router = fixture.router
+    optionToken = fixture.optionToken
+    redeemToken = fixture.redeemToken
+    strikeToken = fixture.strikeToken
+    uniswapRouter = fixture.uniswapRouter
+    uniswapFactory = fixture.uniswapFactory
+    underlyingToken = fixture.underlyingToken
+    dai = fixture.dai
   })
 
-  safeMintWithETH = async (inputUnderlyings) => {
-    let mintparams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
-    // Calculate the strike price of each unit of underlying token
-    let outputRedeems = inputUnderlyings.mul(quote).div(base)
-
-    // The balance of the user we are checking before and after is their ether balance.
-    let underlyingBal = await signer.getBalance()
-    let optionBal = await getTokenBalance(optionToken, Alice)
-    let redeemBal = await getTokenBalance(redeemToken, Alice)
-
-    // Since the user is sending ethers, the change in their balance will need to incorporate gas costs.
-    let gasUsed = await signer.estimateGas(
-      router.executeCall(connector.address, mintparams, {
-        value: inputUnderlyings,
-      })
-    )
-
-    // Call the mint function and check that the event was emitted.
-    await expect(
-      router.connect(signer).executeCall(connector.address, mintparams, {
-        value: inputUnderlyings,
-      })
-    )
-      .to.emit(connector, 'Minted')
-      .withArgs(Alice, optionToken.address, inputUnderlyings.toString(), outputRedeems.toString())
-
-    let underlyingsChange = (await signer.getBalance()).sub(underlyingBal).add(gasUsed)
-    let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-    let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
-
-    assertWithinError(underlyingsChange, inputUnderlyings.mul(-1))
-    assertWithinError(optionsChange, inputUnderlyings)
-    assertWithinError(redeemsChange, outputRedeems)
-
-    await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
-  }
-
-  safeExerciseForETH = async (inputUnderlyings) => {
-    let exParams = connector.interface.encodeFunctionData('safeExerciseForETH', [optionToken.address, inputUnderlyings])
-    // Options:Underlyings are always at a 1:1 ratio.
-    let inputOptions = inputUnderlyings
-    // Calculate the amount of strike tokens necessary to exercise
-    let inputStrikes = inputUnderlyings.mul(quote).div(base)
-
-    // The balance of the user we are checking before and after is their ether balance.
-    let underlyingBal = await signer.getBalance()
-    let optionBal = await getTokenBalance(optionToken, Alice)
-    let strikeBal = await getTokenBalance(quoteToken, Alice)
-
-    await expect(router.connect(signer).executeCall(connector.address, exParams))
-      .to.emit(connector, 'Exercised')
-      .withArgs(Alice, optionToken.address, inputUnderlyings.toString())
-
-    let underlyingsChange = (await signer.getBalance()).sub(underlyingBal)
-    let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-    let strikesChange = (await getTokenBalance(quoteToken, Alice)).sub(strikeBal)
-
-    assertWithinError(underlyingsChange, inputUnderlyings)
-    assertWithinError(optionsChange, inputOptions.mul(-1))
-    assertWithinError(strikesChange, inputStrikes.mul(-1))
-
-    await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
-  }
-
-  safeCloseForETH = async (inputOptions) => {
-    let closeParams = connector.interface.encodeFunctionData('safeCloseForETH', [optionToken.address, inputOptions])
-    let inputRedeems = inputOptions.mul(quote).div(base)
-
-    // The balance of the user we are checking before and after is their ether balance.
-    let underlyingBal = await signer.getBalance()
-    let optionBal = await getTokenBalance(optionToken, Alice)
-    let redeemBal = await getTokenBalance(redeemToken, Alice)
-
-    await expect(router.connect(signer).executeCall(connector.address, closeParams))
-      .to.emit(connector, 'Closed')
-      .withArgs(Alice, optionToken.address, inputOptions.toString())
-
-    let underlyingsChange = (await signer.getBalance()).sub(underlyingBal)
-    let optionsChange = (await getTokenBalance(optionToken, Alice)).sub(optionBal)
-    let redeemsChange = (await getTokenBalance(redeemToken, Alice)).sub(redeemBal)
-
-    assertWithinError(underlyingsChange, inputOptions)
-    assertWithinError(optionsChange, inputOptions.mul(-1))
-    assertWithinError(redeemsChange, inputRedeems.mul(-1))
-
-    await verifyOptionInvariants(baseToken, quoteToken, optionToken, redeemToken)
-  }
+  describe('view functions', () => {
+    it('getWeth()', async () => {
+      expect(await router.getWeth()).to.eq(weth.address)
+    })
+    it('getCaller()', async () => {
+      expect(await router.getCaller()).to.eq(AddressZero)
+    })
+    it('getRegistry()', async () => {
+      expect(await router.getRegistry()).to.eq(registry.address)
+    })
+    it('getRegisteredOption() on registered option', async () => {
+      expect(await router.getRegisteredOption(optionToken.address)).to.eq(true)
+    })
+    it('getRegisteredOption() on unregisteredOption', async () => {
+      expect(await router.getRegisteredOption(Alice)).to.eq(false)
+    })
+    it('getRegisteredConnector() on registered connector', async () => {
+      expect(await router.getRegisteredConnector(connector.address)).to.eq(true)
+    })
+    it('getRegisteredConnector() on unregistered connector', async () => {
+      expect(await router.getRegisteredConnector(Alice)).to.eq(false)
+    })
+    it('apiVersion()', async () => {
+      expect(await router.apiVersion()).to.eq('2.0.0')
+    })
+  })
 
   describe('halt', () => {
-    beforeEach(async () => {
-      // Deploy a new router & connector instance
-      // 4. deploy router
-      router = await deploy('PrimitiveRouter', { from: signers[0], args: [weth.address, registry.address] })
-
-      // 5. deploy connector
-      connector = await deploy('PrimitiveCore', { from: signers[0], args: [weth.address, router.address] })
-      liquidity = await deploy('PrimitiveLiquidity', {
-        from: signers[0],
-        args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
-      })
-      swaps = await deploy('PrimitiveSwaps', {
-        from: signers[0],
-        args: [weth.address, router.address, uniswapFactory.address, uniswapRouter.address],
-      })
-      await router.setRegisteredConnectors([connector.address, liquidity.address, swaps.address], [true, true, true])
-      // Approve the tokens that are being used
-      await baseToken.approve(router.address, MILLION_ETHER)
-      await quoteToken.approve(router.address, MILLION_ETHER)
-      await optionToken.approve(router.address, MILLION_ETHER)
-      await redeemToken.approve(router.address, MILLION_ETHER)
+    it('halt()', async () => {
+      await expect(router.halt()).to.emit(router, 'Paused')
     })
-
+    it('halt() when already halted to unpause', async () => {
+      await expect(router.halt()).to.emit(router, 'Paused')
+      await expect(router.halt()).to.emit(router, 'Unpaused')
+    })
     it('Router should be unusable when halted', async () => {
       let inputUnderlyings = parseEther('1')
-      let mintparams = connector.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
+      let mintparams = fixture.core.interface.encodeFunctionData('safeMintWithETH', [optionToken.address])
       await router.halt()
 
       await expect(
-        router.executeCall(connector.address, mintparams, {
+        router.executeCall(fixture.core.address, mintparams, {
           value: inputUnderlyings,
         })
       ).to.be.revertedWith(ERR_PAUSED)
     })
 
     it('Only deployer can halt', async () => {
-      await expect(router.connect(signers[2]).halt()).to.be.revertedWith(ERR_OWNABLE)
+      await expect(router.connect(wallet1).halt()).to.be.revertedWith(ERR_OWNABLE)
+    })
+  })
+
+  describe('direct calling', () => {
+    it('transferFromCaller() fails if called directly', async () => {
+      await expect(router.transferFromCaller(Alice, '0')).to.be.revertedWith('Router: NOT_CONNECTOR')
+    })
+    it('transferFromCallerToReceiver() fails if called directly', async () => {
+      await expect(router.transferFromCallerToReceiver(Alice, '0', Alice)).to.be.revertedWith('Router: NOT_CONNECTOR')
     })
   })
 })
