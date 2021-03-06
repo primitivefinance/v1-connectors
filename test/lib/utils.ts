@@ -1,5 +1,5 @@
 import { assert, expect } from 'chai'
-import { Contract, BigNumber } from 'ethers'
+import { Contract, BigNumber, Wallet } from 'ethers'
 import { keccak256, defaultAbiCoder, toUtf8Bytes, solidityPack } from 'ethers/lib/utils'
 import { ethers } from 'hardhat'
 const { parseEther } = ethers.utils
@@ -84,9 +84,9 @@ export const verifyOptionInvariants = async (underlyingToken, strikeToken, optio
   let redeemBalance = await redeem.balanceOf(optionToken.address)
   let optionTotalSupply = await optionToken.totalSupply()
 
-  assertBNEqual(underlyingBalance, optionTotalSupply)
-  assertBNEqual(underlyingCache, optionTotalSupply)
-  assertBNEqual(strikeBalance, strikeCache)
+  assertBNEqual(underlyingBalance, optionTotalSupply, `Under Bal != option supply`)
+  assertBNEqual(underlyingCache, optionTotalSupply, `Under cache != option supply`)
+  assertBNEqual(strikeBalance, strikeCache, `Strike Bal != strikeCache`)
   assertBNEqual(optionBalance, 0)
   assertBNEqual(redeemBalance, 0)
 }
@@ -120,8 +120,47 @@ export const getParams = (instance: Contract, method: string, args: any[]): any 
   return instance.interface.encodeFunctionData(method, args)
 }
 
+export const balanceSnapshot = async function (wallet: Wallet, tokens: Contract[], account?: string): Promise<BigNumber[]> {
+  let balances: BigNumber[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    let token = tokens[i]
+    let bal = BigNumber.from(await token.balanceOf(account ? account : wallet.address))
+    balances.push(bal)
+  }
+  return balances
+}
+
+export const applyFunction = function (array1: any[], array2: any[], fn: any): any[] {
+  let differences: any[] = []
+  array1.map((item, i) => {
+    let diff = fn(item, array2[i] /* `${item} against ${array2[i]} with index ${i}` */)
+    differences.push(diff)
+  })
+  return differences
+}
+
+export const subtract = function (item1: BigNumber, item2: BigNumber, message?: string): BigNumber {
+  if (message) console.log(message)
+  return item1.sub(item2)
+}
+
+export const withinError = (a: BigNumber, b: BigNumber, percent?: number) => {
+  percent = percent ? percent : 35
+  a = a.abs()
+  b = b.abs()
+  assert.equal(
+    a.gte(b.mul(100 - percent).div(100)) && a.lte(b.mul(100 + percent).div(100)),
+    true,
+    `${a.gte(b.mul(100 - percent).div(100))} &&  ${a.lte(b.mul(100 + percent).div(100))} is not true`
+  )
+}
+
 const PERMIT_TYPEHASH = keccak256(
   toUtf8Bytes('Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)')
+)
+
+const PERMIT_TYPEHASH_DAI = keccak256(
+  toUtf8Bytes('Permit(address holder,address spender,uint256 nonce,uint256 expiry,bool allowed)')
 )
 
 function getDomainSeparator(name: string, tokenAddress: string, chainId?: number) {
@@ -151,7 +190,7 @@ export async function getApprovalDigest(
 ): Promise<string> {
   const name = await token.name()
   const chainId: number = +(await hardhat.getChainId())
-  const DOMAIN_SEPARATOR = await token.DOMAIN_SEPARATOR() /* getDomainSeparator(name, token.address, chainId) */
+  const DOMAIN_SEPARATOR = await token.DOMAIN_SEPARATOR()
   return keccak256(
     solidityPack(
       ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
@@ -163,6 +202,37 @@ export async function getApprovalDigest(
           defaultAbiCoder.encode(
             ['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256'],
             [PERMIT_TYPEHASH, approve.owner, approve.spender, approve.value, nonce, deadline]
+          )
+        ),
+      ]
+    )
+  )
+}
+
+export async function getApprovalDigestDai(
+  token: Contract,
+  approve: {
+    holder: string
+    spender: string
+    allowed: boolean
+  },
+  nonce: BigNumber,
+  expiry: BigNumber
+): Promise<string> {
+  const name = await token.name()
+  const chainId: number = +(await hardhat.getChainId())
+  const DOMAIN_SEPARATOR = getDomainSeparator(name, token.address, chainId)
+  return keccak256(
+    solidityPack(
+      ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
+      [
+        '0x19',
+        '0x01',
+        DOMAIN_SEPARATOR,
+        keccak256(
+          defaultAbiCoder.encode(
+            ['bytes32', 'address', 'address', 'uint256', 'uint256', 'bool'],
+            [PERMIT_TYPEHASH_DAI, approve.holder, approve.spender, nonce, expiry, approve.allowed]
           )
         ),
       ]

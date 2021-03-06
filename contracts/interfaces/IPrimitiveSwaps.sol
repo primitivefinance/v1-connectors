@@ -19,7 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pragma solidity ^0.6.2;
+pragma solidity 0.6.2;
 
 import {
     IUniswapV2Router02
@@ -94,10 +94,10 @@ interface IPrimitiveSwaps {
     function getOpenPremium(IOption optionToken, uint256 quantity)
         external
         view
-        returns (uint256);
+        returns (uint256, uint256);
 
     function getClosePremium(IOption optionToken, uint256 quantity)
         external
         view
-        returns (uint256);
+        returns (uint256, uint256);
 }

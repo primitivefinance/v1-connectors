@@ -30,10 +30,7 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       chainId: 1337,
-    },
-    coverage: {
-      url: 'http://localhost:8555',
-      gas: 12000000,
+      blockGasLimit: 12500000,
     },
     local: {
       url: 'http://127.0.0.1:8545',
@@ -70,6 +67,15 @@ const config: HardhatUserConfig = {
   },
   solidity: {
     compilers: [
+      {
+        version: '0.5.12',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
       {
         version: '0.7.1',
         settings: {

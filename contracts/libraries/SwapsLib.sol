@@ -19,7 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pragma solidity ^0.6.2;
+pragma solidity 0.6.2;
 
 /**
  * @title   Primitive Swaps Lib
@@ -61,11 +61,9 @@ library SwapsLib {
             getClosePremium(router, optionToken, redeemAmount);
 
         // In most cases there will be an underlying payout, which is subtracted from the redeemAmount.
-        uint256 cost;
+        uint256 cost = CoreLib.getProportionalLongOptions(optionToken, redeemAmount);
         if (payout > 0) {
-            cost = CoreLib.getProportionalLongOptions(optionToken, redeemAmount).sub(
-                payout
-            );
+            cost = cost.sub(payout);
         }
         return (payout, cost, outstanding);
     }
