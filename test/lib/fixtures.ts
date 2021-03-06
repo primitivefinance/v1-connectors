@@ -115,6 +115,22 @@ interface OptionFixture {
   params: OptionParameters
 }
 
+interface DeployedOptions {
+  optionToken: Contract
+  redeemToken: Contract
+}
+
+export async function deployOption(wallet: Wallet, registry: Contract, params: OptionParameters): Promise<DeployedOptions> {
+  await registry.deployOption(params.underlying, params.strike, params.base, params.quote, params.expiry)
+  const optionToken = new ethers.Contract(
+    await registry.allOptionClones(((await registry.getAllOptionClonesLength()) - 1).toString()),
+    Option.abi,
+    wallet
+  )
+  const redeemToken = new ethers.Contract(await optionToken.redeemToken(), Redeem.abi, wallet)
+  return { optionToken, redeemToken }
+}
+
 /**
  * @notice  Gets a call option with a $100 strike price.
  */
@@ -128,21 +144,26 @@ export async function optionFixture([wallet]: Wallet[], provider): Promise<Optio
   const base = parseEther('1')
   const quote = parseEther('100')
   const expiry = '1690868800'
-  await registry.deployOption(underlyingToken.address, strikeToken.address, base, quote, expiry)
-  const optionToken = new ethers.Contract(
-    await registry.allOptionClones(((await registry.getAllOptionClonesLength()) - 1).toString()),
-    Option.abi,
-    wallet
-  )
-  const redeemToken = new ethers.Contract(await optionToken.redeemToken(), Redeem.abi, wallet)
-  const params = {
+  const params: OptionParameters = {
     underlying: underlyingToken.address,
     strike: strikeToken.address,
     base: base,
     quote: quote,
     expiry: expiry,
   }
+  const { optionToken, redeemToken } = await deployOption(wallet, registry, params)
   return { registry, optionToken, redeemToken, underlyingToken, strikeToken, params }
+}
+
+export interface Options {
+  callEth: Contract
+  scallEth: Contract
+  putEth: Contract
+  sputEth: Contract
+  call: Contract
+  scall: Contract
+  put: Contract
+  sput: Contract
 }
 
 export interface PrimitiveV1Fixture {
@@ -160,6 +181,7 @@ export interface PrimitiveV1Fixture {
   swaps: Contract
   liquidity: Contract
   params: OptionParameters
+  options: Options
 }
 
 export async function primitiveV1([wallet]: Wallet[], provider): Promise<PrimitiveV1Fixture> {
@@ -167,7 +189,62 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
     [wallet],
     provider
   )
+
   const { uniswapRouter, uniswapFactory, weth } = await uniswapFixture([wallet], provider)
+  const callEthParams: OptionParameters = {
+    underlying: weth.address,
+    strike: strikeToken.address,
+    base: params.base,
+    quote: params.quote,
+    expiry: params.expiry,
+  }
+
+  const putEthParams: OptionParameters = {
+    underlying: strikeToken.address,
+    strike: weth.address,
+    base: params.quote,
+    quote: params.base,
+    expiry: params.expiry,
+  }
+
+  const putParams: OptionParameters = {
+    underlying: strikeToken.address,
+    strike: underlyingToken.address,
+    base: params.quote,
+    quote: params.base,
+    expiry: params.expiry,
+  }
+
+  let callEth: Contract, scallEth: Contract
+  {
+    const { optionToken, redeemToken } = await deployOption(wallet, registry, callEthParams)
+    callEth = optionToken
+    scallEth = redeemToken
+  }
+  let putEth: Contract, sputEth: Contract
+  {
+    const { optionToken, redeemToken } = await deployOption(wallet, registry, putEthParams)
+    putEth = optionToken
+    sputEth = redeemToken
+  }
+
+  let put: Contract, sput: Contract
+  {
+    const { optionToken, redeemToken } = await deployOption(wallet, registry, putParams)
+    put = optionToken
+    sput = redeemToken
+  }
+
+  const options: Options = {
+    callEth: callEth,
+    scallEth: scallEth,
+    putEth: putEth,
+    sputEth: sputEth,
+    call: optionToken,
+    scall: redeemToken,
+    put: put,
+    sput: sput,
+  }
   const trader = await deployContract(wallet, Trader, [weth.address], overrides)
   const router = await deployContract(wallet, PrimitiveRouter, [weth.address, registry.address], overrides)
   const core = await deployContract(wallet, PrimitiveCore, [weth.address, router.address], overrides)
@@ -206,5 +283,6 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
     swaps,
     liquidity,
     params,
+    options,
   }
 }
