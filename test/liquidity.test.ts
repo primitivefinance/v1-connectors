@@ -148,13 +148,13 @@ describe('PrimitiveLiquidity', function () {
   // ACCOUNTS
   let Admin, User, Alice, Bob
 
-  let trader, teth, dai, optionToken, redeemToken, weth
+  let trader, optionToken, redeemToken, weth
   let underlyingToken, strikeToken
   let base, quote, expiry, params
-  let Primitive, registry
+  let registry
   let uniswapFactory: Contract, uniswapRouter: Contract, primitiveRouter
-  let premium, reserves, reserve0, reserve1
-  let connector, tokens, signers
+  let reserves
+  let connector
   let wallet: Wallet, wallet1: Wallet
 
   const assertInvariant = async function () {
@@ -242,117 +242,64 @@ describe('PrimitiveLiquidity', function () {
     })
 
     it('should revert if amountBMin is greater than optimal amountB', async () => {
-      // assume the pair has a ratio of redeem : teth of 100 : 1.
-      // If we attempt to provide 100 short tokens, we need to imply a price ratio when we call the function.
-      // If we imply a ratio that is less than 100 : 1, it should revert.
-
-      let optionAddress = optionToken.address
-      let amountOptions = parseEther('0.1')
-      // skew the amountADesired ratio to be more, so the transaction reverts
-      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
-      let to = Alice
-
       let path = [redeemToken.address, underlyingToken.address]
-
       let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
       reserves = [reserveA, reserveB]
 
-      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
+      const amount: BigNumber = parseEther('0.1') // Total deposit amount
+      const amountOptions = getOptionAmount(amount, params.base, params.quote, reserves) // Amount of deposit used for option minting
 
-      ;[, amountBMin] = await _addLiquidity(
-        uniswapRouter,
-        reserves,
-        amountADesired,
-        amountBDesired,
-        amountAOptimal,
-        amountBOptimal
-      )
+      let amountADesired = amountOptions.mul(quote).div(base) // Quantity of short options provided as liquidity
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1]) // Remaining underlying to deposit.
 
-      let params = await utils.getParams(connector, 'addShortLiquidityWithUnderlying', [
-        optionAddress,
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlying', [
+        optionToken.address,
         amountOptions,
         amountBDesired.add(1),
-        BigNumber.from(amountBMin).add(1),
-        to,
+        amountBDesired.add(1),
+        Alice,
         deadline,
       ])
-      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
     })
 
     it('should revert if amountAMin is less than amountAOptimal', async () => {
-      // assume the pair has a ratio of redeem : teth of 100 : 1.
-      // If we attempt to provide 100 short tokens, we need to imply a ratio.
-      // If we imply a ratio that is less than 100 : 1, it should revert.
-
-      let optionAddress = optionToken.address
-      let amountOptions = parseEther('0.1')
-      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
-      let to = Alice
-
       let path = [redeemToken.address, underlyingToken.address]
-
       let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
       reserves = [reserveA, reserveB]
 
-      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
+      const amount: BigNumber = parseEther('0.1') // Total deposit amount
+      const amountOptions = getOptionAmount(amount, params.base, params.quote, reserves) // Amount of deposit used for option minting
 
-      ;[, amountBMin] = await _addLiquidity(
-        uniswapRouter,
-        reserves,
-        amountADesired,
-        amountBDesired,
-        amountAOptimal,
-        amountBOptimal
-      )
+      let amountADesired = amountOptions.mul(quote).div(base) // Quantity of short options provided as liquidity
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1]) // Remaining underlying to deposit.
 
-      let params = await utils.getParams(connector, 'addShortLiquidityWithUnderlying', [
-        optionAddress,
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlying', [
+        optionToken.address,
         amountOptions,
         amountBDesired.sub(1),
-        amountBMin,
-        to,
+        amountBDesired,
+        Alice,
         deadline,
       ])
-      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params)).to.be.revertedWith(FAIL)
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
     })
   })
 
   describe('addShortLiquidityWithUnderlyingWithPermit()', function () {
     it('use permitted underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(wallet.address)
-      let redeemBalanceBefore = await redeemToken.balanceOf(wallet.address)
-      let optionBalanceBefore = await optionToken.balanceOf(wallet.address)
-
-      let optionAddress = optionToken.address
-      let amountOptions = parseEther('0.1')
-      let amountADesired = amountOptions.mul(quote).div(base) // amount of options to mint 1:100
-      let amountBMin = 0
-      let to = wallet.address
+      let tokens: Contract[] = [underlyingToken, redeemToken, optionToken]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
       let path = [redeemToken.address, underlyingToken.address]
-
       let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
       reserves = [reserveA, reserveB]
 
-      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountBOptimal = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1])
-      let amountAOptimal = await uniswapRouter.quote(amountBDesired, reserves[1], reserves[0])
+      const amount: BigNumber = parseEther('0.1') // Total deposit amount
+      const amountOptions = getOptionAmount(amount, params.base, params.quote, reserves) // Amount of deposit used for option minting
 
-      ;[, amountBMin] = await _addLiquidity(
-        uniswapRouter,
-        reserves,
-        amountADesired,
-        amountBDesired,
-        amountAOptimal,
-        amountBOptimal
-      )
-
+      let amountADesired = amountOptions.mul(quote).div(base) // Quantity of short options provided as liquidity
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1]) // Remaining underlying to deposit.
       const nonce = await underlyingToken.nonces(wallet.address)
       const digest = await utils.getApprovalDigest(
         underlyingToken,
@@ -362,49 +309,36 @@ describe('PrimitiveLiquidity', function () {
       )
       const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
 
-      let params = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithPermit', [
-        optionAddress,
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithPermit', [
+        optionToken.address,
         amountOptions,
         amountBDesired,
-        amountBMin,
-        to,
+        amountBDesired,
+        Alice,
         deadline,
         v,
         r,
         s,
       ])
-      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params))
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams))
         .to.emit(connector, 'AddLiquidity')
         .to.emit(primitiveRouter, 'Executed')
 
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(wallet.address)
-      let redeemBalanceAfter = await redeemToken.balanceOf(wallet.address)
-      let optionBalanceAfter = await optionToken.balanceOf(wallet.address)
-
-      // Used underlyings to mint options (wallet.address)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore)
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
-
-      const expectedUnderlyingChange = amountOptions.mul(quote).div(base).mul(reserveB).div(reserveA).add(amountOptions)
-
-      assertBNEqual(optionChange.toString(), amountOptions) // kept options
-      assertBNEqual(redeemChange.toString(), '0') // kept options
-      assertBNEqual(underlyingChange, expectedUnderlyingChange.mul(-1))
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      const expectedUnderlyingChange = amountADesired.mul(reserveB).div(reserveA).add(amountOptions)
+      await applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
     })
   })
 
   describe('removeShortLiquidityThenCloseOptions()', function () {
     it('burns UNI-V2 lp shares, then closes the withdrawn shortTokens', async () => {
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
-      let quoteBalanceBefore = await strikeToken.balanceOf(Alice)
-      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
-      let optionBalanceBefore = await optionToken.balanceOf(Alice)
+      let tokens: Contract[] = [underlyingToken, strikeToken, redeemToken, optionToken]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
       let optionAddress = optionToken.address
       let liquidity = parseEther('0.1')
-      let path = [redeemToken.address, teth.address]
+      let path = [redeemToken.address, underlyingToken.address]
       let pairAddress = await uniswapFactory.getPair(path[0], path[1])
       let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
       await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
@@ -413,55 +347,43 @@ describe('PrimitiveLiquidity', function () {
 
       let totalSupply = await pair.totalSupply()
       let amount0 = liquidity.mul(await redeemToken.balanceOf(pairAddress)).div(totalSupply)
-      let amount1 = liquidity.mul(await teth.balanceOf(pairAddress)).div(totalSupply)
+      let amount1 = liquidity.mul(await underlyingToken.balanceOf(pairAddress)).div(totalSupply)
 
       let amountAMin = amount0
       let amountBMin = amount1
-      let to = Alice
 
-      let params = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptions', [
+      let removeParams = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptions', [
         optionAddress,
         liquidity,
         amountAMin,
         amountBMin,
-        to,
+        Alice,
         deadline,
       ])
 
-      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, params))
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams))
         .to.emit(connector, 'RemoveLiquidity')
         .to.emit(primitiveRouter, 'Executed')
 
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
-      let quoteBalanceAfter = await strikeToken.balanceOf(Alice)
-      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
-      let optionBalanceAfter = await optionToken.balanceOf(Alice)
-
-      // Used underlyings to mint options (Alice)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore)
-      // Purchased quoteTokens with our options (Alice)
-      let quoteChange = quoteBalanceAfter.sub(quoteBalanceBefore)
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
-
-      assertBNEqual(underlyingChange.toString(), amountAMin.mul(base).div(quote).add(amountBMin))
-      assertBNEqual(optionChange.toString(), amountAMin.mul(base).div(quote).mul(-1))
-      assertBNEqual(quoteChange.toString(), '0')
-      assert(redeemChange.gt(0) || redeemChange.isZero() == true, `Redeem change is not gt 0`)
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      const expectedUnderlyingChange = amountAMin.mul(base).div(quote).add(amountBMin)
+      await applyFunction(
+        deltaBalances,
+        [expectedUnderlyingChange, '0', '0', amountAMin.mul(base).div(quote).mul(-1)],
+        assertBNEqual
+      )
     })
   })
 
   describe('removeShortLiquidityThenCloseOptionsWithPermit()', function () {
     it('use permitted underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
-      let underlyingBalanceBefore = await underlyingToken.balanceOf(Alice)
-      let quoteBalanceBefore = await strikeToken.balanceOf(Alice)
-      let redeemBalanceBefore = await redeemToken.balanceOf(Alice)
-      let optionBalanceBefore = await optionToken.balanceOf(Alice)
+      let tokens: Contract[] = [underlyingToken, strikeToken, redeemToken, optionToken]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
       let optionAddress = optionToken.address
       let liquidity = parseEther('0.1')
-      let path = [redeemToken.address, teth.address]
+      let path = [redeemToken.address, underlyingToken.address]
       let pairAddress = await uniswapFactory.getPair(path[0], path[1])
       let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
       await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
@@ -470,11 +392,10 @@ describe('PrimitiveLiquidity', function () {
 
       let totalSupply = await pair.totalSupply()
       let amount0 = liquidity.mul(await redeemToken.balanceOf(pairAddress)).div(totalSupply)
-      let amount1 = liquidity.mul(await teth.balanceOf(pairAddress)).div(totalSupply)
+      let amount1 = liquidity.mul(await underlyingToken.balanceOf(pairAddress)).div(totalSupply)
 
       let amountAMin = amount0
       let amountBMin = amount1
-      let to = Alice
 
       const nonce = await pair.nonces(wallet.address)
       const digest = await utils.getApprovalDigest(
@@ -485,38 +406,30 @@ describe('PrimitiveLiquidity', function () {
       )
       const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
 
-      let params = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptionsWithPermit', [
+      let removeParams = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptionsWithPermit', [
         optionAddress,
         liquidity,
         amountAMin,
         amountBMin,
-        to,
+        Alice,
         deadline,
         v,
         r,
         s,
       ])
-      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params))
+
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams))
         .to.emit(connector, 'RemoveLiquidity')
         .to.emit(primitiveRouter, 'Executed')
 
-      let underlyingBalanceAfter = await underlyingToken.balanceOf(Alice)
-      let quoteBalanceAfter = await strikeToken.balanceOf(Alice)
-      let redeemBalanceAfter = await redeemToken.balanceOf(Alice)
-      let optionBalanceAfter = await optionToken.balanceOf(Alice)
-
-      // Used underlyings to mint options (Alice)
-      let underlyingChange = underlyingBalanceAfter.sub(underlyingBalanceBefore)
-      // Purchased quoteTokens with our options (Alice)
-      let quoteChange = quoteBalanceAfter.sub(quoteBalanceBefore)
-      // Sold options for quoteTokens to the pair, pair has more options (Pair)
-      let optionChange = optionBalanceAfter.sub(optionBalanceBefore)
-      let redeemChange = redeemBalanceAfter.sub(redeemBalanceBefore)
-
-      assertBNEqual(underlyingChange.toString(), amountAMin.mul(base).div(quote).add(amountBMin))
-      assertBNEqual(optionChange.toString(), amountAMin.mul(base).div(quote).mul(-1))
-      assertBNEqual(quoteChange.toString(), '0')
-      assert(redeemChange.gt(0) || redeemChange.isZero() == true, `Redeem change is not gt 0`)
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      const expectedUnderlyingChange = amountAMin.mul(base).div(quote).add(amountBMin)
+      await applyFunction(
+        deltaBalances,
+        [expectedUnderlyingChange, '0', '0', amountAMin.mul(base).div(quote).mul(-1)],
+        assertBNEqual
+      )
     })
   })
 })
