@@ -358,6 +358,7 @@ contract PrimitiveSwaps is
         // Return tokens to `getCaller()`.
         _transferToCaller(redeem);
         _transferToCaller(optionAddress);
+        emit Buy(getCaller(), optionAddress, quantity, premium);
         return (quantity, premium);
     }
 

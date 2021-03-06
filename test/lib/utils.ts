@@ -144,6 +144,17 @@ export const subtract = function (item1: BigNumber, item2: BigNumber, message?: 
   return item1.sub(item2)
 }
 
+export const withinError = (a: BigNumber, b: BigNumber, percent?: number) => {
+  percent = percent ? percent : 35
+  a = a.abs()
+  b = b.abs()
+  assert.equal(
+    a.gte(b.mul(100 - percent).div(100)) && a.lte(b.mul(100 + percent).div(100)),
+    true,
+    `${a.gte(b.mul(100 - percent).div(100))} &&  ${a.lte(b.mul(100 + percent).div(100))} is not true`
+  )
+}
+
 const PERMIT_TYPEHASH = keccak256(
   toUtf8Bytes('Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)')
 )

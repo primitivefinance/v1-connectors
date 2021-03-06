@@ -488,7 +488,7 @@ describe('PrimitiveLiquidity', function () {
 
     it('Reverts if option is not an Eth Call', async () => {
       let addParams = await utils.getParams(connector, 'addShortLiquidityWithETH', [
-        options.put,
+        options.put.address,
         parseEther('0.1'),
         0,
         0,

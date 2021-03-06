@@ -20,6 +20,7 @@ const {
   applyFunction,
   subtract,
   balanceSnapshot,
+  withinError,
 } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
 const { FAIL } = constants.ERR_CODES
@@ -386,6 +387,78 @@ describe('Swaps', function () {
       let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
       let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       applyFunction(deltaBalances, [premium.mul(-1), '0', '0', amountOptions], assertBNEqual)
+    })
+  })
+
+  describe('openFlashLongWithETH()', function () {
+    beforeEach(async function () {
+      await addLiquidityETH(wallet, fixture, 1050)
+    })
+    it('Use ETH to buy ETH call options', async function () {
+      let option: Contract = options.callEth
+      let redeem: Contract = options.scallEth
+      let tokens: Contract[] = [weth, strikeToken, redeem, option]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let beforeEth: BigNumber[] = [await wallet.getBalance()]
+
+      // Get the pair instance to approve it to the primitiveRouter
+      let amountOptions = parseEther('0.1')
+      let path = [redeem.address, weth.address]
+      let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      let [premium] = await connector.getOpenPremium(option.address, amountOptions)
+      premium = premium.gt(0) ? premium : parseEther('0')
+
+      let params = getParams(connector, 'openFlashLongWithETH', [option.address, amountOptions])
+      let gasUsed = (await primitiveRouter.estimateGas.executeCall(connector.address, params, { value: premium })).mul(
+        await wallet.getGasPrice()
+      )
+
+      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params, { value: premium }))
+        .to.emit(connector, 'Buy')
+        .withArgs(wallet.address, option.address, amountOptions, premium)
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      let afterEth: BigNumber[] = [BigNumber.from(await wallet.getBalance())]
+      let deltaEth: any[] = applyFunction(afterEth, beforeEth, subtract)
+      applyFunction(deltaBalances, ['0', '0', '0', amountOptions], assertBNEqual)
+      applyFunction(deltaEth, [premium.add(gasUsed).mul(-1)], withinError)
+    })
+  })
+
+  describe('closeFlashLongForETH()', function () {
+    beforeEach(async function () {
+      await addLiquidityETH(wallet, fixture, 1050)
+    })
+    it('Close ETH call options for ETH', async function () {
+      let option: Contract = options.callEth
+      let redeem: Contract = options.scallEth
+      let tokens: Contract[] = [weth, strikeToken, redeem, option]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let beforeEth: BigNumber[] = [await wallet.getBalance()]
+
+      // Get the pair instance to approve it to the primitiveRouter
+      let amountRedeems = parseEther('0.01')
+      let path = [weth.address, redeem.address]
+      let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      let [premium, negPremium] = await connector.getClosePremium(option.address, amountRedeems)
+
+      let params = getParams(connector, 'closeFlashLongForETH', [option.address, amountRedeems, premium])
+      let gasUsed = (await primitiveRouter.estimateGas.executeCall(connector.address, params)).mul(
+        await wallet.getGasPrice()
+      )
+      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, params))
+        .to.emit(connector, 'Sell')
+        .withArgs(Alice, option.address, amountRedeems, premium)
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      let afterEth: BigNumber[] = [await wallet.getBalance()]
+      let deltaEth: any[] = applyFunction(afterEth, beforeEth, subtract)
+      applyFunction(deltaBalances, ['0', '0', '0', amountRedeems.mul(base).div(quote).mul(-1)], assertBNEqual)
+      applyFunction(deltaEth, [premium.sub(gasUsed)], withinError)
     })
   })
 
