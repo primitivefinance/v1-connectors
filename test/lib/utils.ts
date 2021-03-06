@@ -84,9 +84,9 @@ export const verifyOptionInvariants = async (underlyingToken, strikeToken, optio
   let redeemBalance = await redeem.balanceOf(optionToken.address)
   let optionTotalSupply = await optionToken.totalSupply()
 
-  assertBNEqual(underlyingBalance, optionTotalSupply)
-  assertBNEqual(underlyingCache, optionTotalSupply)
-  assertBNEqual(strikeBalance, strikeCache)
+  assertBNEqual(underlyingBalance, optionTotalSupply, `Under Bal != option supply`)
+  assertBNEqual(underlyingCache, optionTotalSupply, `Under cache != option supply`)
+  assertBNEqual(strikeBalance, strikeCache, `Strike Bal != strikeCache`)
   assertBNEqual(optionBalance, 0)
   assertBNEqual(redeemBalance, 0)
 }
