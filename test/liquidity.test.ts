@@ -329,6 +329,18 @@ describe('PrimitiveLiquidity', function () {
       ])
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
     })
+
+    it('Reverts if option is not registered', async () => {
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlying', [
+        Alice,
+        parseEther('0.1'),
+        0,
+        0,
+        Alice,
+        deadline,
+      ])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
+    })
   })
 
   describe('addShortLiquidityWithUnderlyingWithPermit()', function () {
@@ -373,6 +385,30 @@ describe('PrimitiveLiquidity', function () {
       let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       const expectedUnderlyingChange = amountADesired.mul(reserveB).div(reserveA).add(amountOptions)
       applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
+    })
+
+    it('Reverts if option is not registered', async () => {
+      const nonce = await underlyingToken.nonces(wallet.address)
+      const digest = await utils.getApprovalDigest(
+        underlyingToken,
+        { owner: wallet.address, spender: primitiveRouter.address, value: parseEther('0') },
+        nonce,
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithPermit', [
+        Alice,
+        parseEther('0.1'),
+        '0',
+        '0',
+        Alice,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
     })
   })
 
@@ -435,6 +471,34 @@ describe('PrimitiveLiquidity', function () {
         )
       })
     })
+
+    it('Reverts if option is not registered', async () => {
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithETH', [
+        Alice,
+        parseEther('0.1'),
+        0,
+        0,
+        Alice,
+        deadline,
+      ])
+      await expect(
+        primitiveRouter.connect(Admin).executeCall(connector.address, addParams, { value: parseEther('0.1') })
+      ).to.be.revertedWith(FAIL)
+    })
+
+    it('Reverts if option is not an Eth Call', async () => {
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithETH', [
+        options.put,
+        parseEther('0.1'),
+        0,
+        0,
+        Alice,
+        deadline,
+      ])
+      await expect(
+        primitiveRouter.connect(Admin).executeCall(connector.address, addParams, { value: parseEther('0.1') })
+      ).to.be.revertedWith(FAIL)
+    })
   })
 
   describe('removeShortLiquidityThenCloseOptions()', function () {
@@ -479,6 +543,60 @@ describe('PrimitiveLiquidity', function () {
         [expectedUnderlyingChange, '0', '0', amountAMin.mul(base).div(quote).mul(-1)],
         assertBNEqual
       )
+    })
+
+    it('Removes eth call liquidity by burning LP shares, closes options, and returns all ETH', async () => {
+      await addLiquidityETH(wallet, fixture, 1050)
+      let option: Contract = options.callEth
+      let redeem: Contract = options.scallEth
+      let tokens: Contract[] = [weth, redeem, option]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+
+      let optionAddress = option.address
+      let liquidity = parseEther('0.1')
+      let path = [redeem.address, weth.address]
+      let pairAddress = await uniswapFactory.getPair(path[0], path[1])
+      let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
+      await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
+      assert.equal((await pair.balanceOf(Alice)) >= liquidity, true, 'err not enough pair tokens')
+      assert.equal(pairAddress != constants.ADDRESSES.ZERO_ADDRESS, true, 'err pair not deployed')
+
+      let totalSupply = await pair.totalSupply()
+      let amount0 = liquidity.mul(await redeem.balanceOf(pairAddress)).div(totalSupply)
+      let amount1 = liquidity.mul(await weth.balanceOf(pairAddress)).div(totalSupply)
+
+      let amountAMin = amount0
+      let amountBMin = amount1
+
+      let removeParams = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptions', [
+        optionAddress,
+        liquidity,
+        amountAMin,
+        amountBMin,
+        Alice,
+        deadline,
+      ])
+
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams))
+        .to.emit(connector, 'RemoveLiquidity')
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      const expectedUnderlyingChange = amountAMin.mul(base).div(quote).add(amountBMin)
+      applyFunction(deltaBalances, ['0', '0', amountAMin.mul(base).div(quote).mul(-1)], assertBNEqual)
+    })
+
+    it('Reverts if option is not registered', async () => {
+      let removeParams = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptions', [
+        Alice,
+        parseEther('0.1'),
+        0,
+        0,
+        Alice,
+        deadline,
+      ])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams)).to.be.revertedWith(FAIL)
     })
   })
 
@@ -537,6 +655,30 @@ describe('PrimitiveLiquidity', function () {
         assertBNEqual
       )
     })
+
+    it('Reverts if option is not registered', async () => {
+      const nonce = await underlyingToken.nonces(wallet.address)
+      const digest = await utils.getApprovalDigest(
+        underlyingToken,
+        { owner: wallet.address, spender: primitiveRouter.address, value: parseEther('0.1') },
+        nonce,
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let removeParams = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptionsWithPermit', [
+        Alice,
+        parseEther('0.1'),
+        0,
+        0,
+        Alice,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams)).to.be.revertedWith(FAIL)
+    })
   })
 
   describe('addShortLiquidityWithUnderlyingWithDaiPermit()', function () {
@@ -590,6 +732,29 @@ describe('PrimitiveLiquidity', function () {
       let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       const expectedUnderlyingChange = amountADesired.mul(reserveB).div(reserveA).add(amountOptions)
       applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
+    })
+    it('Reverts if option is not registered', async () => {
+      const nonce = await dai.nonces(wallet.address)
+      const digest = await utils.getApprovalDigestDai(
+        dai,
+        { holder: wallet.address, spender: primitiveRouter.address, allowed: true },
+        BigNumber.from(nonce),
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let removeParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithDaiPermit', [
+        Alice,
+        parseEther('0.1'),
+        0,
+        0,
+        Alice,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams)).to.be.revertedWith(FAIL)
     })
   })
 })
