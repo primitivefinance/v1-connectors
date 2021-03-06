@@ -27,7 +27,9 @@
     "deploy:rinkeby": "cross-env hardhat deploy --network rinkeby",
     "deploy:mainnet": "cross-env hardhat deploy --network live",
     "verify:rinkeby": "cross-env hardhat run ./scripts/verify.js --network rinkeby",
-    "verify:mainnet": "cross-env hardhat run ./scripts/verify.js --network live"
+    "verify:mainnet": "cross-env hardhat run ./scripts/verify.js --network live",
+    "deploy-options:rinkeby": "cross-env hardhat run ./scripts/options.ts --network rinkeby",
+    "deploy-options:mainnet": "cross-env hardhat run ./scripts/options.ts --network live"
   },
   "repository": {
     "type": "git",

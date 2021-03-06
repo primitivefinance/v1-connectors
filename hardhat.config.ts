@@ -18,10 +18,10 @@ import 'prettier-plugin-solidity'
 
 // == Environment ==
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20).toString('base64')
-//const rinkeby = process.env.RINKEBY || new ethers.providers.InfuraProvider('rinkeby').connection.url
-//const mainnet = process.env.MAINNET || new ethers.providers.InfuraProvider('mainnet').connection.url
-//const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
-//const live = process.env.MNEMONIC || mnemonic
+const rinkeby = process.env.RINKEBY || new ethers.providers.InfuraProvider('rinkeby').connection.url
+const mainnet = process.env.MAINNET || new ethers.providers.InfuraProvider('mainnet').connection.url
+const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
+const live = process.env.MNEMONIC || mnemonic
 
 // == hardhat Config ==
 
@@ -37,7 +37,7 @@ const config: HardhatUserConfig = {
       gasPrice: 80000000000,
       timeout: 1000000,
     },
-    /* live: {
+    live: {
       url: mainnet,
       accounts: {
         mnemonic: live,
@@ -45,14 +45,14 @@ const config: HardhatUserConfig = {
       chainId: 1,
       from: '0xaF31D3C2972F62Eb08F96a1Fe29f579d61b4294D',
       gasPrice: 30000000000,
-    }, */
-    /* rinkeby: {
+    },
+    rinkeby: {
       url: rinkeby,
       accounts: {
         mnemonic: mnemonic,
       },
       chainId: 4,
-    }, */
+    },
   },
   mocha: {
     timeout: 100000000,
