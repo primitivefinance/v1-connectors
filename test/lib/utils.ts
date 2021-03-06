@@ -1,5 +1,5 @@
 import { assert, expect } from 'chai'
-import { Contract, BigNumber } from 'ethers'
+import { Contract, BigNumber, Wallet } from 'ethers'
 import { keccak256, defaultAbiCoder, toUtf8Bytes, solidityPack } from 'ethers/lib/utils'
 import { ethers } from 'hardhat'
 const { parseEther } = ethers.utils
@@ -118,6 +118,30 @@ export const sortTokens = (tokenA, tokenB) => {
 
 export const getParams = (instance: Contract, method: string, args: any[]): any => {
   return instance.interface.encodeFunctionData(method, args)
+}
+
+export const balanceSnapshot = async function (wallet: Wallet, tokens: Contract[], account?: string): Promise<BigNumber[]> {
+  let balances: BigNumber[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    let token = tokens[i]
+    let bal = BigNumber.from(await token.balanceOf(account ? account : wallet.address))
+    balances.push(bal)
+  }
+  return balances
+}
+
+export const applyFunction = function (array1: any[], array2: any[], fn: any): any[] {
+  let differences: any[] = []
+  array1.map((item, i) => {
+    let diff = fn(item, array2[i] /* `${item} against ${array2[i]} with index ${i}` */)
+    differences.push(diff)
+  })
+  return differences
+}
+
+export const subtract = function (item1: BigNumber, item2: BigNumber, message?: string): BigNumber {
+  if (message) console.log(message)
+  return item1.sub(item2)
 }
 
 const PERMIT_TYPEHASH = keccak256(

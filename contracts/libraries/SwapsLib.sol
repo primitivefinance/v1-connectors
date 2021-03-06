@@ -61,11 +61,9 @@ library SwapsLib {
             getClosePremium(router, optionToken, redeemAmount);
 
         // In most cases there will be an underlying payout, which is subtracted from the redeemAmount.
-        uint256 cost;
+        uint256 cost = CoreLib.getProportionalLongOptions(optionToken, redeemAmount);
         if (payout > 0) {
-            cost = CoreLib.getProportionalLongOptions(optionToken, redeemAmount).sub(
-                payout
-            );
+            cost = cost.sub(payout);
         }
         return (payout, cost, outstanding);
     }

@@ -377,10 +377,13 @@ contract PrimitiveSwaps is
         (IUniswapV2Pair pair, address underlying, address redeem) =
             getOptionPair(optionToken);
         // Close the options, releasing underlying tokens to this contract.
-        _closeOptions(optionToken);
+        uint256 outputUnderlyings = _closeOptions(optionToken);
         // Get repay amounts.
         (uint256 payout, uint256 cost, uint256 outstanding) =
             SwapsLib.repayClose(_router, optionToken, flashLoanQuantity);
+        if (payout > 0) {
+            cost = outputUnderlyings.sub(payout);
+        }
         // Pay back the pair in underlyingTokens.
         if (cost > 0) {
             IERC20(underlying).safeTransfer(address(pair), cost);
@@ -494,8 +497,9 @@ contract PrimitiveSwaps is
         ); // Ensure that _msgSender() is actually a V2 pair.
         require(sender == address(this), "PrimitiveSwaps: NOT_SENDER"); // Ensure called by this contract.
         (bool success, bytes memory returnData) = address(this).call(data); // Execute the callback.
+        (uint256 amountA, uint256 amountB) = abi.decode(returnData, (uint256, uint256));
         require(
-            success && (returnData.length == 0 || abi.decode(returnData, (bool))),
+            success && (returnData.length == 0 || amountA > 0 || amountB > 0),
             "PrimitiveSwaps: CALLBACK"
         );
     }
@@ -538,37 +542,37 @@ contract PrimitiveSwaps is
     }
 
     /**
-     * @dev    Calculates the effective premium, denominated in underlyingTokens, to buy `quantity` of `optionToken`s.
-     * @notice UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
-     *         IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
-     *         Buying negative premium options will pay out redeemTokens.
-     *         An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
-     *         Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
-     * @param  optionToken The optionToken to get the premium cost of purchasing.
-     * @param  quantity The quantity of long option tokens that will be purchased.
+     * @dev     Calculates the effective premium, denominated in underlyingTokens, to buy `quantity` of `optionToken`s.
+     * @notice  UniswapV2 adds a 0.3009027% fee which is applied to the premium as 0.301%.
+     *          IMPORTANT: If the pair's reserve ratio is incorrect, there could be a 'negative' premium.
+     *          Buying negative premium options will pay out redeemTokens.
+     *          An 'incorrect' ratio occurs when the (reserves of redeemTokens / strike ratio) >= reserves of underlyingTokens.
+     *          Implicitly uses the `optionToken`'s underlying and redeem tokens for the pair.
+     * @param   optionToken The optionToken to get the premium cost of purchasing.
+     * @param   quantity The quantity of long option tokens that will be purchased.
+     * @return  (uint, uint) Returns the `premium` to buy `quantity` of `optionToken` and the `negativePremium`.
      */
     function getOpenPremium(IOption optionToken, uint256 quantity)
         public
         view
         override
-        returns (uint256)
+        returns (uint256, uint256)
     {
-        (uint256 premium, ) = SwapsLib.getOpenPremium(_router, optionToken, quantity);
-        return premium;
+        return SwapsLib.getOpenPremium(_router, optionToken, quantity);
     }
 
     /**
-     * @dev    Calculates the effective premium, denominated in underlyingTokens, to sell `optionToken`s.
-     * @param  optionToken The optionToken to get the premium cost of purchasing.
-     * @param  quantity The quantity of short option tokens that will be closed.
+     * @dev     Calculates the effective premium, denominated in underlyingTokens, to sell `optionToken`s.
+     * @param   optionToken The optionToken to get the premium cost of purchasing.
+     * @param   quantity The quantity of short option tokens that will be closed.
+     * @return  (uint, uint) Returns the `premium` to sell `quantity` of `optionToken` and the `negativePremium`.
      */
     function getClosePremium(IOption optionToken, uint256 quantity)
         public
         view
         override
-        returns (uint256)
+        returns (uint256, uint256)
     {
-        (uint256 payout, ) = SwapsLib.getClosePremium(_router, optionToken, quantity);
-        return payout;
+        return SwapsLib.getClosePremium(_router, optionToken, quantity);
     }
 }

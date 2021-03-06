@@ -94,10 +94,10 @@ interface IPrimitiveSwaps {
     function getOpenPremium(IOption optionToken, uint256 quantity)
         external
         view
-        returns (uint256);
+        returns (uint256, uint256);
 
     function getClosePremium(IOption optionToken, uint256 quantity)
         external
         view
-        returns (uint256);
+        returns (uint256, uint256);
 }
