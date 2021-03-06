@@ -19,7 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pragma solidity ^0.6.2;
+pragma solidity 0.6.2;
 
 import {IOption} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
 import {IERC20Permit} from "./IERC20Permit.sol";
