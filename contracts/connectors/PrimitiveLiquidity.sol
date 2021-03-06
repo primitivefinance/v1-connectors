@@ -227,7 +227,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     )
         external
         override
-        nonReentrant
         onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
@@ -238,7 +237,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
         DaiPermit(underlying).permit(
             getCaller(),
-            address(this),
+            address(_primitiveRouter),
             IERC20Permit(underlying).nonces(getCaller()),
             deadline,
             true,
@@ -422,37 +421,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         return sum;
     }
 
-    struct RemoveAmounts {
-        uint256 liquidity;
-        uint256 amountAMin;
-        uint256 amountBMin;
-        uint256 deadline;
-    }
-
-    /**
-     * @notice  Calls UniswapV2Router02.removeLiquidity() to burn LP tokens for pair tokens.
-     * @param   tokenA The first token of the pair.
-     * @param   tokenB The second token of the pair.
-     * @param   params The amounts to specify the amount to remove and minAmounts to withdraw.
-     * @return  Returns (amountTokenA, amountTokenB) to this contract.
-     */
-    function _removeLiquidity(
-        address tokenA,
-        address tokenB,
-        RemoveAmounts memory params
-    ) internal returns (uint256, uint256) {
-        return
-            _router.removeLiquidity(
-                tokenA,
-                tokenB,
-                params.liquidity,
-                params.amountAMin,
-                params.amountBMin,
-                address(this),
-                params.deadline
-            );
-    }
-
     /**
      * @notice  Pulls LP tokens, burns them, removes liquidity, pull option token, burns then, pushes all underlying tokens.
      * @dev     Uses permit to pull LP tokens.
@@ -503,6 +471,37 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
                 amountBMin_,
                 to_,
                 deadline_
+            );
+    }
+
+    struct RemoveAmounts {
+        uint256 liquidity;
+        uint256 amountAMin;
+        uint256 amountBMin;
+        uint256 deadline;
+    }
+
+    /**
+     * @notice  Calls UniswapV2Router02.removeLiquidity() to burn LP tokens for pair tokens.
+     * @param   tokenA The first token of the pair.
+     * @param   tokenB The second token of the pair.
+     * @param   params The amounts to specify the amount to remove and minAmounts to withdraw.
+     * @return  Returns (amountTokenA, amountTokenB) to this contract.
+     */
+    function _removeLiquidity(
+        address tokenA,
+        address tokenB,
+        RemoveAmounts memory params
+    ) internal returns (uint256, uint256) {
+        return
+            _router.removeLiquidity(
+                tokenA,
+                tokenB,
+                params.liquidity,
+                params.amountAMin,
+                params.amountBMin,
+                address(this),
+                params.deadline
             );
     }
 

@@ -18,7 +18,7 @@ const { FAIL } = constants.ERR_CODES
 import { deploy, deployTokens, deployWeth, tokenFromAddress } from './lib/erc20'
 const { AddressZero } = ethers.constants
 import { ecsign } from 'ethereumjs-util'
-import { primitiveV1, OptionParameters, PrimitiveV1Fixture } from './lib/fixtures'
+import { primitiveV1, OptionParameters, PrimitiveV1Fixture, Options } from './lib/fixtures'
 
 const _addLiquidity = async (router, reserves, amountADesired, amountBDesired, amountAMin, amountBMin) => {
   let amountA, amountB
@@ -93,7 +93,7 @@ const addLiquidity = async function (wallet: Wallet, fixture: PrimitiveV1Fixture
   const quote = fixture.params.quote
   const totalOptions = parseEther('20')
   await fixture.underlyingToken.connect(wallet).mint(wallet.address, totalOptions)
-  await fixture.underlyingToken.connect(wallet).mint(wallet.address, totalOptions)
+  await fixture.underlyingToken.connect(wallet).mint(wallet.address, totalOptions.mul(ratio).div(1000))
   await fixture.trader
     .connect(wallet)
     .safeMint(fixture.optionToken.address, totalOptions.mul(ratio).div(1000), wallet.address)
@@ -110,6 +110,41 @@ const addLiquidity = async function (wallet: Wallet, fixture: PrimitiveV1Fixture
       wallet.address,
       deadline
     )
+}
+const addLiquidityETH = async function (wallet: Wallet, fixture: PrimitiveV1Fixture, ratio: number) {
+  const base = fixture.params.base
+  const quote = fixture.params.quote
+  const option = fixture.options.callEth
+  const redeem = fixture.options.scallEth
+  const underlying = fixture.weth
+  const totalOptions = parseEther('20')
+  await underlying.connect(wallet).deposit({ value: totalOptions })
+  await underlying.connect(wallet).deposit({ value: totalOptions.mul(ratio).div(1000) })
+  await fixture.trader.connect(wallet).safeMint(option.address, totalOptions.mul(ratio).div(1000), wallet.address)
+  const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
+  let pair: string = await fixture.uniswapFactory.getPair(redeem.address, underlying.address)
+  if (pair !== AddressZero) return true
+  await fixture.uniswapRouter
+    .connect(wallet)
+    .addLiquidity(redeem.address, underlying.address, totalRedeemForPair, totalOptions, 0, 0, wallet.address, deadline)
+}
+
+const addLiquidityDAI = async function (wallet: Wallet, fixture: PrimitiveV1Fixture, ratio: number) {
+  const base = fixture.params.quote
+  const quote = fixture.params.base
+  const option = fixture.options.putEth
+  const redeem = fixture.options.sputEth
+  const underlying = fixture.dai
+  const totalOptions = parseEther('20')
+  await underlying.connect(wallet).mint(wallet.address, totalOptions)
+  await underlying.connect(wallet).mint(wallet.address, totalOptions.mul(ratio).div(1000))
+  await fixture.trader.connect(wallet).safeMint(option.address, totalOptions.mul(ratio).div(1000), wallet.address)
+  const totalRedeemForPair = totalOptions.mul(quote).div(base).mul(ratio).div(1000)
+  let pair: string = await fixture.uniswapFactory.getPair(redeem.address, underlying.address)
+  if (pair !== AddressZero) return true
+  await fixture.uniswapRouter
+    .connect(wallet)
+    .addLiquidity(redeem.address, underlying.address, totalRedeemForPair, totalOptions, 0, 0, wallet.address, deadline)
 }
 
 const balanceSnapshot = async function (wallet: Wallet, tokens: Contract[], account?: string): Promise<BigNumber[]> {
@@ -147,9 +182,9 @@ const deadline = Math.floor(Date.now() / 1000) + 60 * 20
 describe('PrimitiveLiquidity', function () {
   // ACCOUNTS
   let Admin, User, Alice, Bob
-
-  let trader, optionToken, redeemToken, weth
-  let underlyingToken, strikeToken
+  let fixture
+  let trader, optionToken, redeemToken, weth: Contract, dai: Contract
+  let underlyingToken, strikeToken, options: Options
   let base, quote, expiry, params
   let registry
   let uniswapFactory: Contract, uniswapRouter: Contract, primitiveRouter
@@ -173,17 +208,16 @@ describe('PrimitiveLiquidity', function () {
     Alice = Admin.address
     Bob = User.address
 
-    const fixture = await loadFixture(primitiveV1)
+    fixture = await loadFixture(primitiveV1)
     weth = fixture.weth
     trader = fixture.trader
     params = fixture.params
-    dai = fixture.strikeToken
+    options = fixture.options
     base = fixture.params.base
     registry = fixture.registry
     quote = fixture.params.quote
     connector = fixture.liquidity
     expiry = fixture.params.expiry
-    teth = fixture.underlyingToken
     primitiveRouter = fixture.router
     optionToken = fixture.optionToken
     redeemToken = fixture.redeemToken
@@ -191,6 +225,7 @@ describe('PrimitiveLiquidity', function () {
     uniswapRouter = fixture.uniswapRouter
     uniswapFactory = fixture.uniswapFactory
     underlyingToken = fixture.underlyingToken
+    dai = fixture.dai
 
     await addLiquidity(wallet, fixture, 1050)
   })
@@ -206,10 +241,20 @@ describe('PrimitiveLiquidity', function () {
     it('getFactory()', async function () {
       assert.equal(await connector.getFactory(), uniswapFactory.address)
     })
+
+    it('getOptionPair()', async function () {
+      let optionPair = await connector.getOptionPair(optionToken.address)
+      let actual = [
+        await uniswapFactory.getPair(underlyingToken.address, redeemToken.address),
+        underlyingToken.address,
+        redeemToken.address,
+      ]
+      applyFunction(actual, optionPair, assert.equal)
+    })
   })
 
   describe('addShortLiquidityWithUnderlying()', function () {
-    it('use underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
+    it('Provide liquidity to an option market with underlying tokens', async function () {
       let tokens: Contract[] = [underlyingToken, redeemToken, optionToken]
       let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
@@ -236,12 +281,12 @@ describe('PrimitiveLiquidity', function () {
         .to.emit(primitiveRouter, 'Executed')
 
       let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
-      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       const expectedUnderlyingChange = amountADesired.mul(reserveB).div(reserveA).add(amountOptions)
-      await applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
+      applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
     })
 
-    it('should revert if amountBMin is greater than optimal amountB', async () => {
+    it('Revert if amountBMin is greater than optimal amountB', async () => {
       let path = [redeemToken.address, underlyingToken.address]
       let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
       reserves = [reserveA, reserveB]
@@ -263,7 +308,7 @@ describe('PrimitiveLiquidity', function () {
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
     })
 
-    it('should revert if amountAMin is less than amountAOptimal', async () => {
+    it('Revert if amountAMin is less than amountAOptimal', async () => {
       let path = [redeemToken.address, underlyingToken.address]
       let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
       reserves = [reserveA, reserveB]
@@ -287,7 +332,7 @@ describe('PrimitiveLiquidity', function () {
   })
 
   describe('addShortLiquidityWithUnderlyingWithPermit()', function () {
-    it('use permitted underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
+    it('Provide liquidity to an option market using underlying tokens pulled with permit', async function () {
       let tokens: Contract[] = [underlyingToken, redeemToken, optionToken]
       let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
@@ -325,14 +370,75 @@ describe('PrimitiveLiquidity', function () {
         .to.emit(primitiveRouter, 'Executed')
 
       let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
-      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       const expectedUnderlyingChange = amountADesired.mul(reserveB).div(reserveA).add(amountOptions)
-      await applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
+      applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
+    })
+  })
+
+  describe('addShortLiquidityWithETH()', function () {
+    it('Provide ETH liquidity to an ETH Call option market', async function () {
+      await addLiquidityETH(wallet, fixture, 1050)
+      let option: Contract = options.callEth
+      let redeem: Contract = options.scallEth
+      let tokens: Contract[] = [weth, redeem, option]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let beforeEth: BigNumber[] = [await wallet.getBalance()]
+
+      let path = [redeem.address, weth.address]
+      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      reserves = [reserveA, reserveB]
+
+      const amount: BigNumber = parseEther('0.1') // Total deposit amount
+      const amountOptions = getOptionAmount(amount, params.base, params.quote, reserves) // Amount of deposit used for option minting
+
+      let amountADesired = amountOptions.mul(quote).div(base) // Quantity of short options provided as liquidity
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1]) // Remaining underlying to deposit.
+
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithETH', [
+        option.address,
+        amountOptions,
+        amountBDesired,
+        amountBDesired,
+        Alice,
+        deadline,
+      ])
+
+      let gasUsed = (
+        await primitiveRouter.estimateGas.executeCall(connector.address, addParams, {
+          value: amountOptions.add(amountBDesired),
+        })
+      ).mul(await wallet.getGasPrice())
+
+      await expect(
+        primitiveRouter
+          .connect(wallet)
+          .executeCall(connector.address, addParams, { value: amountOptions.add(amountBDesired) })
+      )
+        .to.emit(connector, 'AddLiquidity')
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let afterEth: BigNumber[] = [await wallet.getBalance()]
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      let deltaEth: any[] = applyFunction(afterEth, beforeEth, subtract)
+      const expectedUnderlyingChange = amountOptions.add(amountBDesired).add(gasUsed)
+      applyFunction(deltaBalances, ['0', '0', amountOptions], assertBNEqual)
+      applyFunction(deltaEth, [expectedUnderlyingChange.mul(-1)], (a, b) => {
+        a = a.abs()
+        b = b.abs()
+        assert.equal(
+          // within 1% error
+          a.gte(b.mul(99).div(100)) && a.lte(b.mul(101).div(100)),
+          true,
+          `${a.gte(b.mul(99).div(100))} &&  ${a.lte(b.mul(101).div(100))} is not true`
+        )
+      })
     })
   })
 
   describe('removeShortLiquidityThenCloseOptions()', function () {
-    it('burns UNI-V2 lp shares, then closes the withdrawn shortTokens', async () => {
+    it('Removes liquidity by burning LP shares, closes options, and returns all underlyings', async () => {
       let tokens: Contract[] = [underlyingToken, strikeToken, redeemToken, optionToken]
       let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
@@ -366,9 +472,9 @@ describe('PrimitiveLiquidity', function () {
         .to.emit(primitiveRouter, 'Executed')
 
       let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
-      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       const expectedUnderlyingChange = amountAMin.mul(base).div(quote).add(amountBMin)
-      await applyFunction(
+      applyFunction(
         deltaBalances,
         [expectedUnderlyingChange, '0', '0', amountAMin.mul(base).div(quote).mul(-1)],
         assertBNEqual
@@ -377,7 +483,7 @@ describe('PrimitiveLiquidity', function () {
   })
 
   describe('removeShortLiquidityThenCloseOptionsWithPermit()', function () {
-    it('use permitted underlyings to mint options, then provide short + underlying tokens as liquidity', async function () {
+    it('Removes liquidity using LP tokens pulled with permit, then closes options', async function () {
       let tokens: Contract[] = [underlyingToken, strikeToken, redeemToken, optionToken]
       let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
 
@@ -423,13 +529,67 @@ describe('PrimitiveLiquidity', function () {
         .to.emit(primitiveRouter, 'Executed')
 
       let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
-      let deltaBalances: any[] = await applyFunction(afterBalances, beforeBalances, subtract)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
       const expectedUnderlyingChange = amountAMin.mul(base).div(quote).add(amountBMin)
-      await applyFunction(
+      applyFunction(
         deltaBalances,
         [expectedUnderlyingChange, '0', '0', amountAMin.mul(base).div(quote).mul(-1)],
         assertBNEqual
       )
+    })
+  })
+
+  describe('addShortLiquidityWithUnderlyingWithDaiPermit()', function () {
+    it('Provide liquidity to an option market using underlying tokens pulled with permit', async function () {
+      await addLiquidityDAI(wallet, fixture, 1050)
+      let option: Contract = options.putEth
+      let redeem: Contract = options.sputEth
+      let underlying: Contract = dai
+      let tokens: Contract[] = [underlying, redeem, option]
+      let putBase: BigNumber = params.quote
+      let putQuote: BigNumber = params.base
+
+      let path = [redeem.address, underlying.address]
+      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      reserves = [reserveA, reserveB]
+
+      const amount: BigNumber = parseEther('0.1') // Total deposit amount
+      const amountOptions = getOptionAmount(amount, putBase, putQuote, reserves) // Amount of deposit used for option minting
+
+      let amountADesired = amountOptions.mul(putQuote).div(putBase) // Quantity of short options provided as liquidity
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1]) // Remaining underlying to deposit.
+
+      await underlying.mint(wallet.address, amountOptions.add(amountBDesired))
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      const nonce = await underlying.nonces(wallet.address)
+      const digest = await utils.getApprovalDigestDai(
+        underlying,
+        { holder: wallet.address, spender: primitiveRouter.address, allowed: true },
+        BigNumber.from(nonce),
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithDaiPermit', [
+        option.address,
+        amountOptions,
+        amountBDesired,
+        amountBDesired,
+        Alice,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+
+      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, addParams))
+        .to.emit(connector, 'AddLiquidity')
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      const expectedUnderlyingChange = amountADesired.mul(reserveB).div(reserveA).add(amountOptions)
+      applyFunction(deltaBalances, [expectedUnderlyingChange.mul(-1), '0', amountOptions], assertBNEqual)
     })
   })
 })

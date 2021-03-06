@@ -18,6 +18,7 @@ import RedeemFactory from '@primitivefi/contracts/artifacts/RedeemFactory.json'
 import OptionTemplateLib from '@primitivefi/contracts/artifacts/OptionTemplateLib.json'
 import RedeemTemplateLib from '@primitivefi/contracts/artifacts/RedeemTemplateLib.json'
 
+import Dai from '../../build/contracts/test/dai.sol/Dai.json'
 import TestERC20 from '../../build/contracts/test/TestERC20.sol/TestERC20.json'
 import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/PrimitiveCore.json'
 import PrimitiveSwaps from '../../build/contracts/connectors/PrimitiveSwaps.sol/PrimitiveSwaps.json'
@@ -28,7 +29,7 @@ import PrimitiveRouterTest from '../../build/contracts/test/PrimitiveRouterTest.
 import UniswapV2Factory from '@uniswap/v2-core/build/UniswapV2Factory.json'
 import UniswapV2Router02 from '@uniswap/v2-periphery/build/UniswapV2Router02.json'
 
-const overrides = { gasLimit: 9500000 }
+const overrides = { gasLimit: 12500000 }
 
 interface WethFixture {
   weth: Contract
@@ -96,6 +97,15 @@ export async function tokenFixture([wallet]: Wallet[], provider): Promise<TokenF
   const tokenA = await deployContract(wallet, TestERC20, ['COMP', 'COMP', amount])
   const tokenB = await deployContract(wallet, TestERC20, ['DAI', 'DAI', amount])
   return { tokenA, tokenB }
+}
+
+interface DaiFixture {
+  dai: Contract
+}
+
+export async function daiFixture([wallet]: Wallet[], provider): Promise<DaiFixture> {
+  const dai = await deployContract(wallet, Dai, [await wallet.getChainId()])
+  return { dai }
 }
 
 export interface OptionParameters {
@@ -182,6 +192,7 @@ export interface PrimitiveV1Fixture {
   liquidity: Contract
   params: OptionParameters
   options: Options
+  dai: Contract
 }
 
 export async function primitiveV1([wallet]: Wallet[], provider): Promise<PrimitiveV1Fixture> {
@@ -189,6 +200,8 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
     [wallet],
     provider
   )
+
+  const { dai } = await daiFixture([wallet], provider)
 
   const { uniswapRouter, uniswapFactory, weth } = await uniswapFixture([wallet], provider)
   const callEthParams: OptionParameters = {
@@ -200,7 +213,7 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
   }
 
   const putEthParams: OptionParameters = {
-    underlying: strikeToken.address,
+    underlying: dai.address,
     strike: weth.address,
     base: params.quote,
     quote: params.base,
@@ -208,7 +221,7 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
   }
 
   const putParams: OptionParameters = {
-    underlying: strikeToken.address,
+    underlying: dai.address,
     strike: underlyingToken.address,
     base: params.quote,
     quote: params.base,
@@ -262,10 +275,10 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
   )
 
   await router.setRegisteredConnectors([core.address, swaps.address, liquidity.address], [true, true, true])
-  await router.setRegisteredOptions([optionToken.address])
+  await router.setRegisteredOptions([callEth.address, putEth.address, optionToken.address, put.address])
   await batchApproval(
     [trader.address, router.address, uniswapRouter.address],
-    [underlyingToken, strikeToken, optionToken, redeemToken, weth],
+    [underlyingToken, strikeToken, optionToken, redeemToken, weth, dai, callEth, scallEth, putEth, sputEth, put, sput],
     [wallet]
   )
   return {
@@ -284,5 +297,6 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
     liquidity,
     params,
     options,
+    dai,
   }
 }

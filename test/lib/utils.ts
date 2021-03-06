@@ -124,6 +124,10 @@ const PERMIT_TYPEHASH = keccak256(
   toUtf8Bytes('Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)')
 )
 
+const PERMIT_TYPEHASH_DAI = keccak256(
+  toUtf8Bytes('Permit(address holder,address spender,uint256 nonce,uint256 expiry,bool allowed)')
+)
+
 function getDomainSeparator(name: string, tokenAddress: string, chainId?: number) {
   return keccak256(
     defaultAbiCoder.encode(
@@ -151,7 +155,7 @@ export async function getApprovalDigest(
 ): Promise<string> {
   const name = await token.name()
   const chainId: number = +(await hardhat.getChainId())
-  const DOMAIN_SEPARATOR = await token.DOMAIN_SEPARATOR() /* getDomainSeparator(name, token.address, chainId) */
+  const DOMAIN_SEPARATOR = await token.DOMAIN_SEPARATOR()
   return keccak256(
     solidityPack(
       ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
@@ -163,6 +167,37 @@ export async function getApprovalDigest(
           defaultAbiCoder.encode(
             ['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256'],
             [PERMIT_TYPEHASH, approve.owner, approve.spender, approve.value, nonce, deadline]
+          )
+        ),
+      ]
+    )
+  )
+}
+
+export async function getApprovalDigestDai(
+  token: Contract,
+  approve: {
+    holder: string
+    spender: string
+    allowed: boolean
+  },
+  nonce: BigNumber,
+  expiry: BigNumber
+): Promise<string> {
+  const name = await token.name()
+  const chainId: number = +(await hardhat.getChainId())
+  const DOMAIN_SEPARATOR = getDomainSeparator(name, token.address, chainId)
+  return keccak256(
+    solidityPack(
+      ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
+      [
+        '0x19',
+        '0x01',
+        DOMAIN_SEPARATOR,
+        keccak256(
+          defaultAbiCoder.encode(
+            ['bytes32', 'address', 'address', 'uint256', 'uint256', 'bool'],
+            [PERMIT_TYPEHASH_DAI, approve.holder, approve.spender, nonce, expiry, approve.allowed]
           )
         ),
       ]
