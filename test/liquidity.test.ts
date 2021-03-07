@@ -273,7 +273,6 @@ describe('PrimitiveLiquidity', function () {
         amountOptions,
         amountBDesired,
         amountBDesired,
-        Alice,
         deadline,
       ])
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams))
@@ -302,7 +301,6 @@ describe('PrimitiveLiquidity', function () {
         amountOptions,
         amountBDesired.add(1),
         amountBDesired.add(1),
-        Alice,
         deadline,
       ])
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
@@ -324,7 +322,6 @@ describe('PrimitiveLiquidity', function () {
         amountOptions,
         amountBDesired.sub(1),
         amountBDesired,
-        Alice,
         deadline,
       ])
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
@@ -336,7 +333,6 @@ describe('PrimitiveLiquidity', function () {
         parseEther('0.1'),
         0,
         0,
-        Alice,
         deadline,
       ])
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
@@ -371,7 +367,6 @@ describe('PrimitiveLiquidity', function () {
         amountOptions,
         amountBDesired,
         amountBDesired,
-        Alice,
         deadline,
         v,
         r,
@@ -402,7 +397,6 @@ describe('PrimitiveLiquidity', function () {
         parseEther('0.1'),
         '0',
         '0',
-        Alice,
         deadline,
         v,
         r,
@@ -436,7 +430,6 @@ describe('PrimitiveLiquidity', function () {
         amountOptions,
         amountBDesired,
         amountBDesired,
-        Alice,
         deadline,
       ])
 
@@ -478,7 +471,6 @@ describe('PrimitiveLiquidity', function () {
         parseEther('0.1'),
         0,
         0,
-        Alice,
         deadline,
       ])
       await expect(
@@ -492,7 +484,6 @@ describe('PrimitiveLiquidity', function () {
         parseEther('0.1'),
         0,
         0,
-        Alice,
         deadline,
       ])
       await expect(
@@ -527,8 +518,6 @@ describe('PrimitiveLiquidity', function () {
         liquidity,
         amountAMin,
         amountBMin,
-        Alice,
-        deadline,
       ])
 
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams))
@@ -573,8 +562,6 @@ describe('PrimitiveLiquidity', function () {
         liquidity,
         amountAMin,
         amountBMin,
-        Alice,
-        deadline,
       ])
 
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams))
@@ -593,8 +580,6 @@ describe('PrimitiveLiquidity', function () {
         parseEther('0.1'),
         0,
         0,
-        Alice,
-        deadline,
       ])
       await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams)).to.be.revertedWith(FAIL)
     })
@@ -635,7 +620,6 @@ describe('PrimitiveLiquidity', function () {
         liquidity,
         amountAMin,
         amountBMin,
-        Alice,
         deadline,
         v,
         r,
@@ -671,7 +655,6 @@ describe('PrimitiveLiquidity', function () {
         parseEther('0.1'),
         0,
         0,
-        Alice,
         deadline,
         v,
         r,
@@ -717,7 +700,6 @@ describe('PrimitiveLiquidity', function () {
         amountOptions,
         amountBDesired,
         amountBDesired,
-        Alice,
         deadline,
         v,
         r,
@@ -743,18 +725,17 @@ describe('PrimitiveLiquidity', function () {
       )
       const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
 
-      let removeParams = await utils.getParams(connector, 'addShortLiquidityDAIWithPermit', [
+      let addParams = await utils.getParams(connector, 'addShortLiquidityDAIWithPermit', [
         Alice,
         parseEther('0.1'),
         0,
         0,
-        Alice,
         deadline,
         v,
         r,
         s,
       ])
-      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams)).to.be.revertedWith(FAIL)
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, addParams)).to.be.revertedWith(FAIL)
     })
   })
 })
