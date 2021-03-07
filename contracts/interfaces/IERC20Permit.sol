@@ -21,10 +21,18 @@
 
 pragma solidity >=0.5.0;
 
-interface IWETH {
-    function deposit() external payable;
+interface IERC20Permit {
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 
-    function transfer(address to, uint256 value) external returns (bool);
+    function nonces(address owner) external view returns (uint256);
 
-    function withdraw(uint256) external;
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
 }

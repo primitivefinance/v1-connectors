@@ -19,12 +19,46 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pragma solidity >=0.5.0;
+pragma solidity 0.6.2;
 
-interface IWETH {
-    function deposit() external payable;
+import {IOption} from "@primitivefi/contracts/contracts/option/interfaces/IOption.sol";
+import {IERC20Permit} from "./IERC20Permit.sol";
 
-    function transfer(address to, uint256 value) external returns (bool);
+interface IPrimitiveCore {
+    // ===== External =====
 
-    function withdraw(uint256) external;
+    function safeMintWithETH(IOption optionToken)
+        external
+        payable
+        returns (uint256, uint256);
+
+    function safeMintWithPermit(
+        IOption optionToken,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256, uint256);
+
+    function safeExerciseWithETH(IOption optionToken)
+        external
+        payable
+        returns (uint256, uint256);
+
+    function safeExerciseForETH(IOption optionToken, uint256 exerciseQuantity)
+        external
+        returns (uint256, uint256);
+
+    function safeRedeemForETH(IOption optionToken, uint256 redeemQuantity)
+        external
+        returns (uint256);
+
+    function safeCloseForETH(IOption optionToken, uint256 closeQuantity)
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
 }

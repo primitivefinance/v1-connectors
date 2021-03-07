@@ -19,12 +19,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pragma solidity >=0.5.0;
+pragma solidity 0.6.2;
 
-interface IWETH {
-    function deposit() external payable;
+import {IPrimitiveRouter} from "../interfaces/IPrimitiveRouter.sol";
+import {IWETH} from "../interfaces/IWETH.sol";
 
-    function transfer(address to, uint256 value) external returns (bool);
+interface IPrimitiveConnector {
+    // ===== External =====
 
-    function withdraw(uint256) external;
+    function checkApproval(address token, address spender) external returns (bool);
+
+    // ===== View =====
+
+    function getWeth() external view returns (IWETH);
+
+    function getCaller() external view returns (address);
+
+    function getPrimitiveRouter() external view returns (IPrimitiveRouter);
+
+    function isApproved(address token, address spender) external view returns (bool);
 }
