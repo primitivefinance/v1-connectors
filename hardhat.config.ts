@@ -9,6 +9,7 @@ import { HardhatUserConfig } from 'hardhat/config'
 dotenvConfig({ path: resolve(__dirname, './.env') })
 
 // == Plugins ==
+import '@nomiclabs/hardhat-ethers'
 import '@nomiclabs/hardhat-etherscan'
 import '@nomiclabs/hardhat-waffle'
 import 'hardhat-deploy'
