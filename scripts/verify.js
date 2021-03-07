@@ -13,11 +13,60 @@ const verifyUniswapConnector = async () => {
     console.error(err)
   }
 }
+
+const verifyConnectors = async () => {
+  let PrimitiveCore = await deployments.get('PrimitiveCore')
+  try {
+    await run('verify', {
+      address: PrimitiveCore.address,
+      contractName: 'contracts/PrimitiveCore.sol:PrimitiveCore',
+      constructorArguments: PrimitiveCore.args,
+    })
+  } catch (err) {
+    console.error(err)
+  }
+
+  let PrimitiveSwaps = await deployments.get('PrimitiveSwaps')
+  try {
+    await run('verify', {
+      address: PrimitiveSwaps.address,
+      contractName: 'contracts/PrimitiveSwaps.sol:PrimitiveSwaps',
+      constructorArguments: PrimitiveSwaps.args,
+    })
+  } catch (err) {
+    console.error(err)
+  }
+
+  let PrimitiveLiquidity = await deployments.get('PrimitiveLiquidity')
+  try {
+    await run('verify', {
+      address: PrimitiveLiquidity.address,
+      contractName: 'contracts/PrimitiveLiquidity.sol:PrimitiveLiquidity',
+      constructorArguments: PrimitiveLiquidity.args,
+    })
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+const verifyRouter = async () => {
+  let PrimitiveRouter = await deployments.get('PrimitiveRouter')
+  try {
+    await run('verify', {
+      address: PrimitiveRouter.address,
+      contractName: 'contracts/PrimitiveRouter.sol:PrimitiveRouter',
+      constructorArguments: PrimitiveRouter.args,
+    })
+  } catch (err) {
+    console.error(err)
+  }
+}
 /**
  * @dev Calling this verify script with the --network tag will verify them on etherscan automatically.
  */
 async function main() {
-  await verifyUniswapConnector()
+  await verifyConnectors()
+  await verifyRouter()
 }
 
 main()

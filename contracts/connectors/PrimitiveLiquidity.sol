@@ -89,13 +89,12 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting redeemTokens with underlyingTokens.
-     * @notice  Pulls underlying tokens from _msgSender() and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
+     * @notice  Pulls underlying tokens from `getCaller()` and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
      *          underlyingToken -> redeemToken -> UNI-V2.
      * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
      * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
      * @param   amountBMax The quantity of underlyingTokens to add with redeemTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
-     * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
     function addShortLiquidityWithUnderlying(
@@ -103,7 +102,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline
     )
         public
@@ -157,13 +155,12 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
-     * @notice  Pulls underlying tokens from _msgSender() and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
+     * @notice  Pulls underlying tokens from `getCaller()` and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
      *          underlyingToken -> redeemToken -> UNI-V2. Uses permit so user does not need to `approve()` our contracts.
      * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
      * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
      * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
-     * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
     function addShortLiquidityWithUnderlyingWithPermit(
@@ -171,7 +168,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -206,7 +202,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
                 quantityOptions,
                 amountBMax,
                 amountBMin,
-                to,
                 deadline
             );
     }
@@ -219,7 +214,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -251,20 +245,18 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
                 quantityOptions,
                 amountBMax,
                 amountBMin,
-                to,
                 deadline
             );
     }
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
-     * @notice  Pulls underlying tokens from _msgSender() and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
+     * @notice  Pulls underlying tokens from `getCaller()` and pushes UNI-V2 liquidity tokens to the `getCaller()` address.
      *          underlyingToken -> redeemToken -> UNI-V2.
      * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
      * @param   quantityOptions The quantity of underlyingTokens to use to mint option + redeem tokens.
      * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
-     * @param   to The address that receives UNI-V2 shares.
      * @param   deadline The timestamp to expire a pending transaction.
      */
     function addShortLiquidityWithETH(
@@ -272,7 +264,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline
     )
         public
@@ -370,24 +361,20 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
 
     /**
      * @dev     Combines Uniswap V2 Router "removeLiquidity" function with Primitive "closeOptions" function.
-     * @notice  Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from _msgSender().
-     *          Then closes the longOptionTokens and withdraws underlyingTokens to the "getCaller()" address.
-     *          Sends underlyingTokens from the burned UNI-V2 liquidity shares to the "getCaller()" address.
+     * @notice  Pulls UNI-V2 liquidity shares with shortOption<>underlying token, and optionTokens from `getCaller()`.
+     *          Then closes the longOptionTokens and withdraws underlyingTokens to the `getCaller()` address.
+     *          Sends underlyingTokens from the burned UNI-V2 liquidity shares to the `getCaller()` address.
      *          UNI-V2 -> optionToken -> underlyingToken.
      * @param   optionAddress The address of the option that will be closed from burned UNI-V2 liquidity shares.
-     * @param   liquidity The quantity of liquidity tokens to pull from _msgSender() and burn.
+     * @param   liquidity The quantity of liquidity tokens to pull from `getCaller()` and burn.
      * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
      * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
-     * @param   to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
-     * @param   deadline The timestamp to expire a pending transaction.
      */
     function removeShortLiquidityThenCloseOptions(
         address optionAddress,
         uint256 liquidity,
         uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
+        uint256 amountBMin
     )
         public
         override
@@ -403,19 +390,15 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         params.liquidity = liquidity;
         params.amountAMin = amountAMin;
         params.amountBMin = amountBMin;
-        params.deadline = deadline;
-        _transferFromCaller(address(pair), liquidity); // Pulls lp tokens from `getCaller()`.
-        checkApproval(address(pair), address(_router)); // Checks lp tokens can be pulled from here.
-        // Calls removeLiquidity on the UniswapV2Router02.
-        (, uint256 underlyingAmount) = _removeLiquidity(redeem, underlying, params);
+        // Pulls lp tokens from `getCaller()` and pushes them to the pair in preparation to invoke `burn()`.
+        _transferFromCallerToReceiver(address(pair), liquidity, address(pair));
+        // Calls `burn` on the `pair`, returning amounts to this contract.
+        (, uint256 underlyingAmount) = _removeLiquidity(pair, redeem, underlying, params);
         uint256 underlyingProceeds = _closeOptions(optionToken); // Returns amount of underlying tokens released.
         // Return remaining tokens/ether.
+        _withdrawETH(); // Unwraps Weth and sends ether to `getCaller()`.
         _transferToCaller(redeem); // Push any remaining redeemTokens from removing liquidity (dust).
-        if (underlying == address(_weth)) {
-            _withdrawETH(); // Unwraps Weth and sends ether to `getCaller()`.
-        } else {
-            _transferToCaller(underlying); // Pushes underlying token to `getCaller()`.
-        }
+        _transferToCaller(underlying); // Pushes underlying token to `getCaller()`.
         uint256 sum = underlyingProceeds.add(underlyingAmount); // Total underlyings sent to `getCaller()`.
         emit RemoveLiquidity(getCaller(), address(optionToken), sum);
         return sum;
@@ -428,7 +411,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   liquidity The quantity of liquidity tokens to pull from _msgSender() and burn.
      * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
      * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
-     * @param   to The address that receives underlyingTokens from burned UNI-V2, and underlyingTokens from closed options.
      * @param   deadline The timestamp to expire a pending transaction and `permit` call.
      */
     function removeShortLiquidityThenCloseOptionsWithPermit(
@@ -436,7 +418,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 liquidity,
         uint256 amountAMin,
         uint256 amountBMin,
-        address to,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -447,7 +428,6 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 deadline_ = deadline;
         uint256 amountAMin_ = amountAMin;
         uint256 amountBMin_ = amountBMin;
-        address to_ = to;
         {
             uint8 v_ = v;
             bytes32 r_ = r;
@@ -468,9 +448,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
                 address(optionToken),
                 liquidity_,
                 amountAMin_,
-                amountBMin_,
-                to_,
-                deadline_
+                amountBMin_
             );
     }
 
@@ -478,31 +456,29 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 liquidity;
         uint256 amountAMin;
         uint256 amountBMin;
-        uint256 deadline;
     }
 
     /**
-     * @notice  Calls UniswapV2Router02.removeLiquidity() to burn LP tokens for pair tokens.
+     * @notice  Calls `UniswapV2Pair.burn(address(this))` to burn LP tokens for pair tokens.
+     * @param   pair The UniswapV2Pair contract to burn LP tokens of.
      * @param   tokenA The first token of the pair.
      * @param   tokenB The second token of the pair.
      * @param   params The amounts to specify the amount to remove and minAmounts to withdraw.
-     * @return  Returns (amountTokenA, amountTokenB) to this contract.
+     * @return  Returns (amountTokenA, amountTokenB) which is (redeem, underlying) amounts.
      */
     function _removeLiquidity(
+        IUniswapV2Pair pair,
         address tokenA,
         address tokenB,
         RemoveAmounts memory params
     ) internal returns (uint256, uint256) {
-        return
-            _router.removeLiquidity(
-                tokenA,
-                tokenB,
-                params.liquidity,
-                params.amountAMin,
-                params.amountBMin,
-                address(this),
-                params.deadline
-            );
+        (uint256 amount0, uint256 amount1) = pair.burn(address(this));
+        (address token0, ) = CoreLib.sortTokens(tokenA, tokenB);
+        (uint256 amountA, uint256 amountB) =
+            tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
+        require(amountA >= params.amountAMin, "PrimitiveLiquidity: INSUFFICIENT_A");
+        require(amountB >= params.amountBMin, "PrimitiveLiquidity: INSUFFICIENT_B");
+        return (amountA, amountB);
     }
 
     // ===== View =====
