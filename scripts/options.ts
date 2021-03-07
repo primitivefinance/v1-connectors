@@ -156,7 +156,7 @@ const deployOption = async (optionParametersObject) => {
 const ADDRESS_FOR_MARKET = {
   eth: {
     1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    4: require('@primitivefi/contracts/deployments/rinkeby/ETH.json').address,
+    4: require('@primitivefi/contracts/deployments/rinkeby/WETH9.json').address,
   },
 }
 
