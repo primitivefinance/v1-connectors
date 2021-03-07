@@ -226,14 +226,27 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
      */
     function _closeOptions(IOption optionToken) internal returns (uint256) {
         address redeem = optionToken.redeemToken();
-        uint256 quantity = _transferBalanceToReceiver(redeem, address(optionToken));
+        uint256 short = IERC20(redeem).balanceOf(address(this));
+        uint256 long = IERC20(address(optionToken)).balanceOf(getCaller());
+        uint256 proportional = CoreLib.getProportionalShortOptions(optionToken, long);
+        // IF user has more longs than proportional shorts, close the `short` amount.
+        if (proportional > short) {
+            proportional = short;
+        }
 
+        // If option is expired, transfer the amt of proportional thats larger.
         if (optionToken.getExpiryTime() >= now) {
+            // Transfers the max proportional amount of short options to option contract.
+            IERC20(redeem).safeTransfer(address(optionToken), proportional);
+            // Pulls the max amount of long options and sends to option contract.
             _transferFromCallerToReceiver(
                 address(optionToken),
-                CoreLib.getProportionalLongOptions(optionToken, quantity),
+                CoreLib.getProportionalLongOptions(optionToken, proportional),
                 address(optionToken)
             );
+        } else {
+            // If not expired, transfer all redeem in balance.
+            IERC20(redeem).safeTransfer(address(optionToken), short);
         }
 
         (, , uint256 outputUnderlyings) = optionToken.closeOptions(address(this));

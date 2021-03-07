@@ -39,7 +39,6 @@ interface IPrimitiveLiquidity {
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline
     )
         external
@@ -54,7 +53,6 @@ interface IPrimitiveLiquidity {
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline
     )
         external
@@ -70,7 +68,6 @@ interface IPrimitiveLiquidity {
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -88,7 +85,6 @@ interface IPrimitiveLiquidity {
         uint256 quantityOptions,
         uint256 amountBMax,
         uint256 amountBMin,
-        address to,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -105,9 +101,7 @@ interface IPrimitiveLiquidity {
         address optionAddress,
         uint256 liquidity,
         uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
+        uint256 amountBMin
     ) external returns (uint256);
 
     function removeShortLiquidityThenCloseOptionsWithPermit(
@@ -115,7 +109,6 @@ interface IPrimitiveLiquidity {
         uint256 liquidity,
         uint256 amountAMin,
         uint256 amountBMin,
-        address to,
         uint256 deadline,
         uint8 v,
         bytes32 r,

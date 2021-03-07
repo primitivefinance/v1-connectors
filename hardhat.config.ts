@@ -9,6 +9,7 @@ import { HardhatUserConfig } from 'hardhat/config'
 dotenvConfig({ path: resolve(__dirname, './.env') })
 
 // == Plugins ==
+import '@nomiclabs/hardhat-ethers'
 import '@nomiclabs/hardhat-etherscan'
 import '@nomiclabs/hardhat-waffle'
 import 'hardhat-deploy'
@@ -18,9 +19,12 @@ import 'prettier-plugin-solidity'
 
 // == Environment ==
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20).toString('base64')
-const rinkeby = process.env.RINKEBY || new ethers.providers.InfuraProvider('rinkeby').connection.url
-const mainnet = process.env.MAINNET || new ethers.providers.InfuraProvider('mainnet').connection.url
-const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
+const rinkeby = process.env.RINKEBY
+const kovan = process.env.KOVAN
+const ropsten = process.env.ROPSTEN
+const goerli = process.env.GOERLI
+const mainnet = process.env.MAINNET
+const mnemonic = process.env.TEST_MNEMONIC
 const live = process.env.MNEMONIC || mnemonic
 
 // == hardhat Config ==
@@ -46,12 +50,33 @@ const config: HardhatUserConfig = {
       from: '0xaF31D3C2972F62Eb08F96a1Fe29f579d61b4294D',
       gasPrice: 30000000000,
     },
+    ropsten: {
+      url: ropsten,
+      accounts: {
+        mnemonic: mnemonic,
+      },
+      chainId: 3,
+    },
     rinkeby: {
       url: rinkeby,
       accounts: {
         mnemonic: mnemonic,
       },
       chainId: 4,
+    },
+    goerli: {
+      url: goerli,
+      accounts: {
+        mnemonic: mnemonic,
+      },
+      chainId: 5,
+    },
+    kovan: {
+      url: kovan,
+      accounts: {
+        mnemonic: mnemonic,
+      },
+      chainId: 42,
     },
   },
   mocha: {
