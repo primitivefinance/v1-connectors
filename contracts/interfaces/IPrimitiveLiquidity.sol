@@ -83,7 +83,7 @@ interface IPrimitiveLiquidity {
             uint256
         );
 
-    function addShortLiquidityWithUnderlyingWithDaiPermit(
+    function addShortLiquidityDAIWithPermit(
         address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,

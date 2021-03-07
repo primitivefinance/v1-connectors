@@ -214,7 +214,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     /**
      * @notice  Specialized function for `permit` calling on Put options (DAI).
      */
-    function addShortLiquidityWithUnderlyingWithDaiPermit(
+    function addShortLiquidityDAIWithPermit(
         address optionAddress,
         uint256 quantityOptions,
         uint256 amountBMax,

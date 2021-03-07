@@ -48,6 +48,19 @@ import {
 import {PrimitiveConnector} from "./PrimitiveConnector.sol";
 import {SwapsLib, SafeMath} from "../libraries/SwapsLib.sol";
 
+interface DaiPermit {
+    function permit(
+        address holder,
+        address spender,
+        uint256 nonce,
+        uint256 expiry,
+        bool allowed,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 contract PrimitiveSwaps is
     PrimitiveConnector,
     IPrimitiveSwaps,
@@ -146,6 +159,48 @@ contract PrimitiveSwaps is
             address(_primitiveRouter),
             maxPremium,
             deadline,
+            v,
+            r,
+            s
+        );
+        _flashSwap(
+            pair, // Pair to flash swap from.
+            underlying, // Token to swap to, i.e. receive optimistically.
+            amountOptions, // Amount of underlying to optimistically receive to mint options with.
+            abi.encodeWithSelector( // Start: Function to call in the callback.
+                bytes4(
+                    keccak256(
+                        bytes("flashMintShortOptionsThenSwap(address,uint256,uint256)")
+                    )
+                ),
+                optionToken, // Option token to mint with flash loaned tokens.
+                amountOptions, // Quantity of underlyingTokens from flash loan to use to mint options.
+                maxPremium // Total price paid (in underlyingTokens) for selling shortOptionTokens.
+            ) // End: Function to call in the callback.
+        );
+        return true;
+    }
+
+    /**
+     * @notice  Executes the same as `openFlashLongWithPermit`, but for DAI.
+     */
+    function openFlashLongWithDAIPermit(
+        IOption optionToken,
+        uint256 amountOptions,
+        uint256 maxPremium,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public override nonReentrant onlyRegistered(optionToken) returns (bool) {
+        // Calls pair.swap(), and executes `flashMintShortOptionsThenSwap` in the `uniswapV2Callee` callback.
+        (IUniswapV2Pair pair, address underlying, ) = getOptionPair(optionToken);
+        DaiPermit(underlying).permit(
+            getCaller(),
+            address(_primitiveRouter),
+            IERC20Permit(underlying).nonces(getCaller()),
+            deadline,
+            true,
             v,
             r,
             s
