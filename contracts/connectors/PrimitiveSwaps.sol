@@ -122,7 +122,7 @@ contract PrimitiveSwaps is
     ) public override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes `flashMintShortOptionsThenSwap` in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, address underlying, ) = getOptionPair(optionToken);
-        _flashSwap(
+        SwapsLib._flashSwap(
             pair, // Pair to flash swap from.
             underlying, // Token to swap to, i.e. receive optimistically.
             amountOptions, // Amount of underlying to optimistically receive to mint options with.
@@ -163,7 +163,7 @@ contract PrimitiveSwaps is
             r,
             s
         );
-        _flashSwap(
+        SwapsLib._flashSwap(
             pair, // Pair to flash swap from.
             underlying, // Token to swap to, i.e. receive optimistically.
             amountOptions, // Amount of underlying to optimistically receive to mint options with.
@@ -205,7 +205,7 @@ contract PrimitiveSwaps is
             r,
             s
         );
-        _flashSwap(
+        SwapsLib._flashSwap(
             pair, // Pair to flash swap from.
             underlying, // Token to swap to, i.e. receive optimistically.
             amountOptions, // Amount of underlying to optimistically receive to mint options with.
@@ -242,7 +242,7 @@ contract PrimitiveSwaps is
         require(msg.value > 0, "PrimitiveSwaps: ZERO"); // Fail early if no Ether was sent.
         // Calls pair.swap(), and executes `flashMintShortOptionsThenSwap` in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, address underlying, ) = getOptionPair(optionToken);
-        _flashSwap(
+        SwapsLib._flashSwap(
             pair, // Pair to flash swap from.
             underlying, // Token to swap to, i.e. receive optimistically.
             amountOptions, // Amount of underlying to optimistically receive to mint options with.
@@ -277,7 +277,7 @@ contract PrimitiveSwaps is
     ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes `flashCloseLongOptionsThenSwap` in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
-        _flashSwap(
+        SwapsLib._flashSwap(
             pair, // Pair to flash swap from.
             redeem, // Token to swap to, i.e. receive optimistically.
             amountRedeems, // Amount of underlying to optimistically receive to close options with.
@@ -310,7 +310,7 @@ contract PrimitiveSwaps is
     ) external override nonReentrant onlyRegistered(optionToken) returns (bool) {
         // Calls pair.swap(), and executes `flashCloseLongOptionsThenSwapForETH` in the `uniswapV2Callee` callback.
         (IUniswapV2Pair pair, , address redeem) = getOptionPair(optionToken);
-        _flashSwap(
+        SwapsLib._flashSwap(
             pair, // Pair to flash swap from.
             redeem, // Token to swap to, i.e. receive optimistically.
             amountRedeems, // Amount of underlying to optimistically receive to close options with.
@@ -508,28 +508,6 @@ contract PrimitiveSwaps is
     }
 
     // ===== Flash Loans =====
-
-    /**
-     * @notice  Passes in `params` to the UniswapV2Pair.swap() function to trigger the callback.
-     * @param   pair The Uniswap Pair to call.
-     * @param   token The token in the Pair to swap to, and thus optimistically receive.
-     * @param   amount The quantity of `token`s to optimistically receive first.
-     * @param   params  The data to call from this contract, using the `uniswapV2Callee` callback.
-     * @return  Whether or not the swap() call suceeded.
-     */
-    function _flashSwap(
-        IUniswapV2Pair pair,
-        address token,
-        uint256 amount,
-        bytes memory params
-    ) internal returns (bool) {
-        // Receives `amount` of `token` to this contract address.
-        uint256 amount0Out = pair.token0() == token ? amount : 0;
-        uint256 amount1Out = pair.token0() == token ? 0 : amount;
-        // Execute the callback function in params.
-        pair.swap(amount0Out, amount1Out, address(this), params);
-        return true;
-    }
 
     /**
      * @dev     The callback function triggered in a UniswapV2Pair.swap() call when the `data` parameter has data.
