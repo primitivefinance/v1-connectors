@@ -2,7 +2,7 @@
 import path from 'path'
 import bip39 from 'bip39'
 import crypto from 'crypto'
-//import ethers from 'ethers'
+import ethers from 'ethers'
 import { config as dotenvConfig } from 'dotenv'
 import { resolve } from 'path'
 import { HardhatUserConfig } from 'hardhat/config'
@@ -24,7 +24,7 @@ const kovan = process.env.KOVAN
 const ropsten = process.env.ROPSTEN
 const goerli = process.env.GOERLI
 const mainnet = process.env.MAINNET
-const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
+const mnemonic = process.env.TEST_MNEMONIC
 const live = process.env.MNEMONIC || mnemonic
 
 // == hardhat Config ==
