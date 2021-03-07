@@ -2,7 +2,7 @@
 import path from 'path'
 import bip39 from 'bip39'
 import crypto from 'crypto'
-import ethers from 'ethers'
+//import ethers from 'ethers'
 import { config as dotenvConfig } from 'dotenv'
 import { resolve } from 'path'
 import { HardhatUserConfig } from 'hardhat/config'
@@ -16,14 +16,15 @@ import 'hardhat-deploy'
 import 'hardhat-gas-reporter'
 import 'solidity-coverage'
 import 'prettier-plugin-solidity'
+import { ethers } from 'hardhat'
 
 // == Environment ==
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20).toString('base64')
-const rinkeby = process.env.RINKEBY || new ethers.ethers.providers.InfuraProvider('rinkeby').connection.url
-const kovan = process.env.KOVAN || new ethers.ethers.providers.InfuraProvider('kovan').connection.url
-const ropsten = process.env.ROPSTEN || new ethers.ethers.providers.InfuraProvider('ropsten').connection.url
-const goerli = process.env.GOERLI || new ethers.ethers.providers.InfuraProvider('goerli').connection.url
-const mainnet = process.env.MAINNET || new ethers.ethers.providers.InfuraProvider('mainnet').connection.url
+const rinkeby = process.env.RINKEBY || new ethers.providers.InfuraProvider('rinkeby').connection.url
+const kovan = process.env.KOVAN || new ethers.providers.InfuraProvider('kovan').connection.url
+const ropsten = process.env.ROPSTEN || new ethers.providers.InfuraProvider('ropsten').connection.url
+const goerli = process.env.GOERLI || new ethers.providers.InfuraProvider('goerli').connection.url
+const mainnet = process.env.MAINNET || new ethers.providers.InfuraProvider('mainnet').connection.url
 const mnemonic = process.env.TEST_MNEMONIC || bip39.generateMnemonic()
 const live = process.env.MNEMONIC || mnemonic
 
