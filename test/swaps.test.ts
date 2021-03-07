@@ -390,6 +390,53 @@ describe('Swaps', function () {
     })
   })
 
+  describe('openFlashLongWithDAIPermit()', function () {
+    beforeEach(async function () {
+      await addLiquidityDAI(wallet, fixture, 1050)
+    })
+    it('use permitted DAI to buy options', async function () {
+      const option: Contract = options.putEth
+      const redeem: Contract = options.sputEth
+      await dai.mint(wallet.address, parseEther('0.1'))
+      let tokens: Contract[] = [dai, strikeToken, redeem, option]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+
+      // Get the pair instance to approve it to the primitiveRouter
+      let amountOptions = parseEther('0.1')
+      let path = [redeem.address, dai.address]
+      let reserves = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      let premium = getPremium(amountOptions, params.quote, params.base, redeem, dai, reserves[0], reserves[1])
+      premium = premium.gt(0) ? premium : parseEther('0')
+
+      const nonce = await dai.nonces(wallet.address)
+      const digest = await utils.getApprovalDigestDai(
+        dai,
+        { holder: wallet.address, spender: primitiveRouter.address, allowed: true },
+        BigNumber.from(nonce),
+        BigNumber.from(deadline)
+      )
+      const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
+
+      let openParams = getParams(connector, 'openFlashLongWithDAIPermit', [
+        option.address,
+        amountOptions,
+        premium,
+        deadline,
+        v,
+        r,
+        s,
+      ])
+      await expect(primitiveRouter.connect(wallet).executeCall(connector.address, openParams))
+        .to.emit(connector, 'Buy')
+        .withArgs(wallet.address, option.address, amountOptions, premium)
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      applyFunction(deltaBalances, [premium.mul(-1), '0', '0', amountOptions], assertBNEqual)
+    })
+  })
+
   describe('openFlashLongWithETH()', function () {
     beforeEach(async function () {
       await addLiquidityETH(wallet, fixture, 1050)

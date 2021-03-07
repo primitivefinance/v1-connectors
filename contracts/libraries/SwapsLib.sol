@@ -31,10 +31,33 @@ pragma solidity 0.6.2;
 import {
     IUniswapV2Router02
 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import {IUniswapV2Pair} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import {CoreLib, IOption, SafeMath} from "./CoreLib.sol";
 
 library SwapsLib {
     using SafeMath for uint256; // Reverts on math underflows/overflows
+
+    /**
+     * @notice  Passes in `params` to the UniswapV2Pair.swap() function to trigger the callback.
+     * @param   pair The Uniswap Pair to call.
+     * @param   token The token in the Pair to swap to, and thus optimistically receive.
+     * @param   amount The quantity of `token`s to optimistically receive first.
+     * @param   params  The data to call from this contract, using the `uniswapV2Callee` callback.
+     * @return  Whether or not the swap() call suceeded.
+     */
+    function _flashSwap(
+        IUniswapV2Pair pair,
+        address token,
+        uint256 amount,
+        bytes memory params
+    ) internal returns (bool) {
+        // Receives `amount` of `token` to this contract address.
+        uint256 amount0Out = pair.token0() == token ? amount : 0;
+        uint256 amount1Out = pair.token0() == token ? 0 : amount;
+        // Execute the callback function in params.
+        pair.swap(amount0Out, amount1Out, address(this), params);
+        return true;
+    }
 
     /**
      * @notice  Gets the amounts to pay out, pay back, and outstanding cost.

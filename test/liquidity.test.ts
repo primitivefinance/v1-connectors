@@ -681,7 +681,7 @@ describe('PrimitiveLiquidity', function () {
     })
   })
 
-  describe('addShortLiquidityWithUnderlyingWithDaiPermit()', function () {
+  describe('addShortLiquidityDAIWithPermit()', function () {
     it('Provide liquidity to an option market using underlying tokens pulled with permit', async function () {
       await addLiquidityDAI(wallet, fixture, 1050)
       let option: Contract = options.putEth
@@ -712,7 +712,7 @@ describe('PrimitiveLiquidity', function () {
       )
       const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
 
-      let addParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithDaiPermit', [
+      let addParams = await utils.getParams(connector, 'addShortLiquidityDAIWithPermit', [
         option.address,
         amountOptions,
         amountBDesired,
@@ -743,7 +743,7 @@ describe('PrimitiveLiquidity', function () {
       )
       const { v, r, s } = ecsign(Buffer.from(digest.slice(2), 'hex'), Buffer.from(wallet.privateKey.slice(2), 'hex'))
 
-      let removeParams = await utils.getParams(connector, 'addShortLiquidityWithUnderlyingWithDaiPermit', [
+      let removeParams = await utils.getParams(connector, 'addShortLiquidityDAIWithPermit', [
         Alice,
         parseEther('0.1'),
         0,
