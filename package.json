@@ -17,6 +17,7 @@
     "test:swaps": "cross-env hardhat test ./test/swaps.test.ts",
     "test:router": "cross-env hardhat test ./test/router.test.ts",
     "test:liquidity": "cross-env hardhat test ./test/liquidity.test.ts",
+    "test:connector": "cross-env hardhat test ./test/connector.test.ts",
     "coverage": "cross-env hardhat coverage",
     "coverage:core": "cross-env hardhat coverage --testfiles 'test/core.test.ts'",
     "coverage:swaps": "cross-env hardhat coverage --testfiles 'test/swaps.test.ts'",

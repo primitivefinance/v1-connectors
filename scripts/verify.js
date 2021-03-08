@@ -61,12 +61,26 @@ const verifyRouter = async () => {
     console.error(err)
   }
 }
+
+const verifyDai = async () => {
+  let Dai = await deployments.get('Dai')
+  try {
+    await run('verify', {
+      address: Dai.address,
+      contractName: 'contracts/Dai.sol:Dai',
+      constructorArguments: Dai.args,
+    })
+  } catch (err) {
+    console.error(err)
+  }
+}
 /**
  * @dev Calling this verify script with the --network tag will verify them on etherscan automatically.
  */
 async function main() {
-  await verifyConnectors()
   await verifyRouter()
+  await verifyConnectors()
+  await verifyDai()
 }
 
 main()
