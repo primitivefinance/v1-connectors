@@ -19,12 +19,12 @@ import 'prettier-plugin-solidity'
 
 // == Environment ==
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || crypto.randomBytes(20).toString('base64')
-const rinkeby = process.env.RINKEBY
-const kovan = process.env.KOVAN
-const ropsten = process.env.ROPSTEN
-const goerli = process.env.GOERLI
-const mainnet = process.env.MAINNET
-const mnemonic = process.env.TEST_MNEMONIC
+const rinkeby = process.env.RINKEBY || ''
+const kovan = process.env.KOVAN || ''
+const ropsten = process.env.ROPSTEN || ''
+const goerli = process.env.GOERLI || ''
+const mainnet = process.env.MAINNET || ''
+const mnemonic = process.env.TEST_MNEMONIC || ''
 const live = process.env.MNEMONIC || mnemonic
 
 // == hardhat Config ==

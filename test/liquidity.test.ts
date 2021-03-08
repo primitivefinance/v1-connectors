@@ -534,6 +534,47 @@ describe('PrimitiveLiquidity', function () {
       )
     })
 
+    it('Removes liquidity but without a full long option balance to close all the short', async () => {
+      await optionToken
+        .connect(wallet)
+        .transfer(wallet1.address, BigNumber.from(await optionToken.balanceOf(wallet.address)))
+      let tokens: Contract[] = [underlyingToken, strikeToken, redeemToken, optionToken]
+      let beforeBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+
+      let optionAddress = optionToken.address
+      let liquidity = parseEther('0.1')
+      let path = [redeemToken.address, underlyingToken.address]
+      let pairAddress = await uniswapFactory.getPair(path[0], path[1])
+      let pair = new ethers.Contract(pairAddress, UniswapV2Pair.abi, Admin)
+      await pair.connect(Admin).approve(primitiveRouter.address, MILLION_ETHER)
+      assert.equal((await pair.balanceOf(Alice)) >= liquidity, true, 'err not enough pair tokens')
+      assert.equal(pairAddress != constants.ADDRESSES.ZERO_ADDRESS, true, 'err pair not deployed')
+
+      let totalSupply = await pair.totalSupply()
+      let amount0 = liquidity.mul(await redeemToken.balanceOf(pairAddress)).div(totalSupply)
+      let amount1 = liquidity.mul(await underlyingToken.balanceOf(pairAddress)).div(totalSupply)
+
+      let amountAMin = amount0
+      let amountBMin = amount1
+
+      let removeParams = await utils.getParams(connector, 'removeShortLiquidityThenCloseOptions', [
+        optionAddress,
+        liquidity,
+        amountAMin,
+        amountBMin,
+      ])
+
+      await expect(primitiveRouter.connect(Admin).executeCall(connector.address, removeParams))
+        .to.emit(connector, 'RemoveLiquidity')
+        .to.emit(primitiveRouter, 'Executed')
+
+      let afterBalances: BigNumber[] = await balanceSnapshot(wallet, tokens)
+      let deltaBalances: any[] = applyFunction(afterBalances, beforeBalances, subtract)
+      const expectedUnderlyingChange = amountBMin
+      console.log(deltaBalances.map((bal) => formatEther(bal)))
+      applyFunction(deltaBalances, [expectedUnderlyingChange, '0', amountAMin, '0'], assertBNEqual)
+    })
+
     it('Removes eth call liquidity by burning LP shares, closes options, and returns all ETH', async () => {
       await addLiquidityETH(wallet, fixture, 1050)
       let option: Contract = options.callEth
