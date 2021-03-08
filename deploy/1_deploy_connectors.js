@@ -40,12 +40,12 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   const swaps = await deploy('PrimitiveSwaps', {
     from: deployer,
     contractName: 'PrimitiveSwaps',
-    args: [WETH[chain], router.address, SUSHISWAP_FACTORY[chain], SUSHISWAP_ROUTER02[chain]],
+    args: [WETH[chain], router.address, SUSHI_FACTORY_ADDRESS[chain], SUSHI_ROUTER_ADDRESS[chain]],
   })
   const liquidity = await deploy('PrimitiveLiquidity', {
     from: deployer,
     contractName: 'PrimitiveLiquidity',
-    args: [WETH[chain], router.address, SUSHISWAP_FACTORY[chain], SUSHISWAP_ROUTER02[chain]],
+    args: [WETH[chain], router.address, SUSHI_FACTORY_ADDRESS[chain], SUSHI_ROUTER_ADDRESS[chain]],
   })
 
   const instance = new ethers.Contract(router.address, router.abi, signer)

@@ -78,6 +78,8 @@ const verifyDai = async () => {
  * @dev Calling this verify script with the --network tag will verify them on etherscan automatically.
  */
 async function main() {
+  await verifyRouter()
+  await verifyConnectors()
   await verifyDai()
 }
 
