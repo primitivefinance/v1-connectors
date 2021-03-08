@@ -24,7 +24,6 @@ import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/Pr
 import PrimitiveSwaps from '../../build/contracts/connectors/PrimitiveSwaps.sol/PrimitiveSwaps.json'
 import PrimitiveRouter from '../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter.json'
 import PrimitiveLiquidity from '../../build/contracts/connectors/PrimitiveLiquidity.sol/PrimitiveLiquidity.json'
-import PrimitiveRouterTest from '../../build/contracts/test/PrimitiveRouterTest.sol/PrimitiveRouterTest.json'
 
 import UniswapV2Factory from '@uniswap/v2-core/build/UniswapV2Factory.json'
 import UniswapV2Router02 from '@uniswap/v2-periphery/build/UniswapV2Router02.json'

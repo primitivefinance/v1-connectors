@@ -248,8 +248,10 @@ abstract contract PrimitiveConnector is IPrimitiveConnector, Context {
             // If not expired, transfer all redeem in balance.
             IERC20(redeem).safeTransfer(address(optionToken), short);
         }
-
-        (, , uint256 outputUnderlyings) = optionToken.closeOptions(address(this));
+        uint outputUnderlyings;
+        if(proportional > 0) {
+            (, ,  outputUnderlyings) = optionToken.closeOptions(address(this));
+        }
         return outputUnderlyings;
     }
 
