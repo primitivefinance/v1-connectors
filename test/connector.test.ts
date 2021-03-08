@@ -213,7 +213,7 @@ describe('Connector', function () {
       let deltaEth: BigNumber[] = utils.applyFunction(afterEth, beforeEth, utils.subtract)
       utils.applyFunction(deltaEth, [value, value.mul(-1)], utils.assertBNEqual)
     })
-    it('redeemOptions()', async () => {
+    /* it('redeemOptions()', async () => {
       value = parseEther('0.1').mul(quote).div(base)
       let short = parseEther('0.1').mul(quote).div(base)
       await underlyingToken.transfer(optionToken.address, value)
@@ -230,7 +230,7 @@ describe('Connector', function () {
       let afterEth: BigNumber[] = await utils.balanceSnapshot(wallet, [underlyingToken, optionToken])
       let deltaEth: BigNumber[] = utils.applyFunction(afterEth, beforeEth, utils.subtract)
       utils.applyFunction(deltaEth, ['0', '0'], utils.assertBNEqual)
-    })
+    }) */
     it('transferBalanceToReceiver()', async () => {
       value = parseEther('0.1')
       await underlyingToken.transfer(connector.address, value)
