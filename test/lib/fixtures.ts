@@ -24,9 +24,11 @@ import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/Pr
 import PrimitiveSwaps from '../../build/contracts/connectors/PrimitiveSwaps.sol/PrimitiveSwaps.json'
 import PrimitiveRouter from '../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter.json'
 import PrimitiveLiquidity from '../../build/contracts/connectors/PrimitiveLiquidity.sol/PrimitiveLiquidity.json'
+import PrimitiveConnectorTest from '../../build/contracts/test/ConnectorTest.sol/ConnectorTest.json'
 
 import UniswapV2Factory from '@uniswap/v2-core/build/UniswapV2Factory.json'
 import UniswapV2Router02 from '@uniswap/v2-periphery/build/UniswapV2Router02.json'
+import { connect } from 'http2'
 
 const overrides = { gasLimit: 12500000 }
 
@@ -192,6 +194,7 @@ export interface PrimitiveV1Fixture {
   params: OptionParameters
   options: Options
   dai: Contract
+  connectorTest: Contract
 }
 
 export async function primitiveV1([wallet]: Wallet[], provider): Promise<PrimitiveV1Fixture> {
@@ -273,7 +276,11 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
     overrides
   )
 
-  await router.setRegisteredConnectors([core.address, swaps.address, liquidity.address], [true, true, true])
+  const connectorTest = await deployContract(wallet, PrimitiveConnectorTest, [weth.address, router.address], overrides)
+  await router.setRegisteredConnectors(
+    [core.address, swaps.address, liquidity.address, connectorTest.address],
+    [true, true, true, true]
+  )
   await router.setRegisteredOptions([callEth.address, putEth.address, optionToken.address, put.address])
   await batchApproval(
     [trader.address, router.address, uniswapRouter.address],
@@ -297,5 +304,6 @@ export async function primitiveV1([wallet]: Wallet[], provider): Promise<Primiti
     params,
     options,
     dai,
+    connectorTest,
   }
 }
