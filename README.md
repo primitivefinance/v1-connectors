@@ -1,8 +1,12 @@
-# Primitive V1 Connectectors Contract Repository
+# Primitive V1 Connectors Contract Repository
 
 ## Documentation
 
 The database of Primitive protocol contracts and documentation is hosted on notion here: [Primitive Protocol HQ](https://www.notion.so/primitivefi/Primitive-Protocol-HQ-fc081b939bb04e2a90ccaebf36faa78e)
+
+## Immunefi Bug Bounty
+
+[\$25,000 Bug Bounty](https://immunefi.com/bounty/primitive/)
 
 ## Contracts
 
