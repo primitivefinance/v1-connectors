@@ -10,7 +10,6 @@ import batchApproval from './lib/batchApproval'
 import { sortTokens } from './lib/utils'
 import { BigNumber, Contract, Wallet } from 'ethers'
 import { ethers, waffle } from 'hardhat'
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 import { ecsign } from 'ethereumjs-util'
 const {
   assertBNEqual,

@@ -14,7 +14,6 @@ import Trader from '@primitivefi/contracts/artifacts/Trader.json'
 import OptionTemplateLib from '@primitivefi/contracts/artifacts/OptionTemplateLib.json'
 import RedeemTemplateLib from '@primitivefi/contracts/artifacts/RedeemTemplateLib.json'
 import PrimitiveRouter from '../../build/contracts/PrimitiveRouter.sol/PrimitiveRouter.json'
-import PrimitiveRouterTest from '../../build/contracts/test/PrimitiveRouterTest.sol/PrimitiveRouterTest.json'
 import PrimitiveCore from '../../build/contracts/connectors/PrimitiveCore.sol/PrimitiveCore.json'
 
 // Constants and Utility functions
@@ -259,13 +258,6 @@ export const approveToken = async (token, signer, spender) => {
 
 export const newRouter = async (signer, params) => {
   const router = await deployContract(signer, PrimitiveRouter, params, {
-    gasLimit: 9500000,
-  })
-  return router
-}
-
-export const newTestRouter = async (signer, params) => {
-  const router = await deployContract(signer, PrimitiveRouterTest, params, {
     gasLimit: 9500000,
   })
   return router
