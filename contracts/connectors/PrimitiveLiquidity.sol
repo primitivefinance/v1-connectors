@@ -63,12 +63,8 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
     event Initialized(address indexed from); // Emitted on deployment.
-    event AddLiquidity(address indexed from, address indexed option, uint256 liquidity);
-    event RemoveLiquidity(
-        address indexed from,
-        address indexed option,
-        uint256 totalUnderlying
-    );
+    event AddLiquidity(address indexed from, address indexed option, uint256 sum);
+    event RemoveLiquidity(address indexed from, address indexed option, uint256 sum);
 
     IUniswapV2Factory private _factory; // The Uniswap V2 factory contract to get pair addresses from.
     IUniswapV2Router02 private _router; // The Uniswap Router contract used to interact with the protocol.
@@ -149,7 +145,13 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
             _transferToCaller(redeem);
             _transferToCaller(address(optionToken));
         }
-        emit AddLiquidity(getCaller(), optionAddress, liquidity);
+        {
+            // scope for event, avoids stack too deep errors
+            address a0 = optionAddress;
+            uint256 q0 = quantityOptions;
+            uint256 q1 = amountBMax;
+            emit AddLiquidity(getCaller(), a0, q0.add(q1));
+        }
         return (amountA, amountB, liquidity);
     }
 
@@ -308,7 +310,13 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
             _transferToCaller(redeem);
             _transferToCaller(address(optionToken));
         }
-        emit AddLiquidity(getCaller(), optionAddress, liquidity);
+        {
+            // scope for event, avoids stack too deep errors
+            address a0 = optionAddress;
+            uint256 q0 = quantityOptions;
+            uint256 q1 = amountBMax;
+            emit AddLiquidity(getCaller(), a0, q0.add(q1));
+        }
         return (amountA, amountB, liquidity);
     }
 
