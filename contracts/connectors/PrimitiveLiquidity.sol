@@ -228,17 +228,10 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
             uint256
         )
     {
-        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-        DaiPermit(underlying).permit(
-            getCaller(),
-            address(_primitiveRouter),
-            IERC20Permit(underlying).nonces(getCaller()),
-            deadline,
-            true,
-            v,
-            r,
-            s
-        );
+        DaiPermit dai = DaiPermit(IOption(optionAddress).getUnderlyingTokenAddress());
+        address caller = getCaller();
+        uint256 nonce = IERC20Permit(dai).nonces(caller);
+        dai.permit(caller, address(_primitiveRouter), nonce, deadline, true, v, r, s);
         return
             addShortLiquidityWithUnderlying(
                 optionAddress,
@@ -278,7 +271,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         )
     {
         require(
-            quantityOptions.add(amountBMax) >= msg.value,
+            msg.value >= quantityOptions.add(amountBMax),
             "PrimitiveLiquidity: INSUFFICIENT"
         );
 
@@ -424,7 +417,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         bytes32 s
     ) external override onlyRegistered(IOption(optionAddress)) returns (uint256) {
         IOption optionToken = IOption(optionAddress);
-        uint256 liquidity_ = liquidity;
+        /* uint256 liquidity_ = liquidity;
         uint256 deadline_ = deadline;
         uint256 amountAMin_ = amountAMin;
         uint256 amountBMin_ = amountBMin;
@@ -442,13 +435,15 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
                 r_,
                 s_
             );
-        }
+        } */
+        (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
+        pair.permit(getCaller(), address(_primitiveRouter), liquidity, deadline, v, r, s);
         return
             removeShortLiquidityThenCloseOptions(
                 address(optionToken),
-                liquidity_,
-                amountAMin_,
-                amountBMin_
+                liquidity,
+                amountAMin,
+                amountBMin
             );
     }
 
