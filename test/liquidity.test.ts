@@ -11,7 +11,6 @@ import { sortTokens } from './lib/utils'
 import { BigNumber, Contract, Wallet } from 'ethers'
 import { ethers, waffle } from 'hardhat'
 const { createFixtureLoader } = waffle
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 const { assertBNEqual, assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
 const { FAIL } = constants.ERR_CODES
