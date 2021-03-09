@@ -11,7 +11,6 @@ import { sortTokens } from './lib/utils'
 import { BigNumber, Contract, Wallet } from 'ethers'
 import { ethers, waffle } from 'hardhat'
 const { createFixtureLoader } = waffle
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
 const { assertBNEqual, assertWithinError, verifyOptionInvariants, getTokenBalance } = utils
 const { ONE_ETHER, MILLION_ETHER } = constants.VALUES
 const { FAIL } = constants.ERR_CODES
@@ -463,6 +462,34 @@ describe('PrimitiveLiquidity', function () {
           `${a.gte(b.mul(99).div(100))} &&  ${a.lte(b.mul(101).div(100))} is not true`
         )
       })
+    })
+
+    it('Reverts if not enough msg.value (ETH) was sent', async function () {
+      await addLiquidityETH(wallet, fixture, 1050)
+      let option: Contract = options.callEth
+      let redeem: Contract = options.scallEth
+
+      let path = [redeem.address, weth.address]
+      let [reserveA, reserveB] = await getReserves(Admin, uniswapFactory, path[0], path[1])
+      reserves = [reserveA, reserveB]
+
+      const amount: BigNumber = parseEther('0.1') // Total deposit amount
+      const amountOptions = getOptionAmount(amount, params.base, params.quote, reserves) // Amount of deposit used for option minting
+
+      let amountADesired = amountOptions.mul(quote).div(base) // Quantity of short options provided as liquidity
+      let amountBDesired = await uniswapRouter.quote(amountADesired, reserves[0], reserves[1]) // Remaining underlying to deposit.
+
+      let addParams = await utils.getParams(connector, 'addShortLiquidityWithETH', [
+        option.address,
+        amountOptions,
+        amountBDesired,
+        amountBDesired,
+        deadline,
+      ])
+
+      await expect(
+        primitiveRouter.connect(wallet).executeCall(connector.address, addParams, { value: '1' })
+      ).to.be.revertedWith(FAIL)
     })
 
     it('Reverts if option is not registered', async () => {

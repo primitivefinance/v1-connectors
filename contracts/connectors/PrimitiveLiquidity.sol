@@ -63,12 +63,8 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     using SafeMath for uint256; // Reverts on math underflows/overflows
 
     event Initialized(address indexed from); // Emitted on deployment.
-    event AddLiquidity(address indexed from, address indexed option, uint256 liquidity);
-    event RemoveLiquidity(
-        address indexed from,
-        address indexed option,
-        uint256 totalUnderlying
-    );
+    event AddLiquidity(address indexed from, address indexed option, uint256 sum);
+    event RemoveLiquidity(address indexed from, address indexed option, uint256 sum);
 
     IUniswapV2Factory private _factory; // The Uniswap V2 factory contract to get pair addresses from.
     IUniswapV2Router02 private _router; // The Uniswap Router contract used to interact with the protocol.
@@ -96,6 +92,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   amountBMax The quantity of underlyingTokens to add with redeemTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
      * @param   deadline The timestamp to expire a pending transaction.
+     * @return  Returns (amountA, amountB, liquidity) amounts.
      */
     function addShortLiquidityWithUnderlying(
         address optionAddress,
@@ -149,12 +146,19 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
             _transferToCaller(redeem);
             _transferToCaller(address(optionToken));
         }
-        emit AddLiquidity(getCaller(), optionAddress, liquidity);
+        {
+            // scope for event, avoids stack too deep errors
+            address a0 = optionAddress;
+            uint256 q0 = quantityOptions;
+            uint256 q1 = amountBMax;
+            emit AddLiquidity(getCaller(), a0, q0.add(q1));
+        }
         return (amountA, amountB, liquidity);
     }
 
     /**
      * @dev     Adds redeemToken liquidity to a redeem<>underlyingToken pair by minting shortOptionTokens with underlyingTokens.
+     *          Doesn't check for registered optionAddress because the returned function does.
      * @notice  Pulls underlying tokens from `getCaller()` and pushes UNI-V2 liquidity tokens to the "getCaller()" address.
      *          underlyingToken -> redeemToken -> UNI-V2. Uses permit so user does not need to `approve()` our contracts.
      * @param   optionAddress The address of the optionToken to get the redeemToken to mint then provide liquidity for.
@@ -162,6 +166,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
      * @param   deadline The timestamp to expire a pending transaction.
+     * @return  Returns (amountA, amountB, liquidity) amounts.
      */
     function addShortLiquidityWithUnderlyingWithPermit(
         address optionAddress,
@@ -175,27 +180,16 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     )
         external
         override
-        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
             uint256
         )
     {
-        {
-            // avoids stack too deep errors
-            address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-            uint256 sum = quantityOptions.add(amountBMax);
-            IERC20Permit(underlying).permit(
-                getCaller(),
-                address(_primitiveRouter),
-                sum,
-                deadline,
-                v,
-                r,
-                s
-            );
-        }
+        IERC20Permit underlying =
+            IERC20Permit(IOption(optionAddress).getUnderlyingTokenAddress());
+        uint256 sum = quantityOptions.add(amountBMax);
+        underlying.permit(getCaller(), address(_primitiveRouter), sum, deadline, v, r, s);
         return
             addShortLiquidityWithUnderlying(
                 optionAddress,
@@ -207,6 +201,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     }
 
     /**
+     * @dev     Doesn't check for registered optionAddress because the returned function does.
      * @notice  Specialized function for `permit` calling on Put options (DAI).
      */
     function addShortLiquidityDAIWithPermit(
@@ -221,18 +216,18 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
     )
         external
         override
-        onlyRegistered(IOption(optionAddress))
         returns (
             uint256,
             uint256,
             uint256
         )
     {
-        address underlying = IOption(optionAddress).getUnderlyingTokenAddress();
-        DaiPermit(underlying).permit(
-            getCaller(),
+        DaiPermit dai = DaiPermit(IOption(optionAddress).getUnderlyingTokenAddress());
+        address caller = getCaller();
+        dai.permit(
+            caller,
             address(_primitiveRouter),
-            IERC20Permit(underlying).nonces(getCaller()),
+            IERC20Permit(address(dai)).nonces(caller),
             deadline,
             true,
             v,
@@ -258,6 +253,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   amountBMax The quantity of underlyingTokens to add with shortOptionTokens to the Uniswap V2 Pair.
      * @param   amountBMin The minimum quantity of underlyingTokens expected to provide liquidity with.
      * @param   deadline The timestamp to expire a pending transaction.
+     * @return  Returns (amountA, amountB, liquidity) amounts.
      */
     function addShortLiquidityWithETH(
         address optionAddress,
@@ -266,7 +262,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint256 amountBMin,
         uint256 deadline
     )
-        public
+        external
         payable
         override
         nonReentrant
@@ -278,7 +274,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         )
     {
         require(
-            quantityOptions.add(amountBMax) >= msg.value,
+            msg.value >= quantityOptions.add(amountBMax),
             "PrimitiveLiquidity: INSUFFICIENT"
         );
 
@@ -315,7 +311,13 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
             _transferToCaller(redeem);
             _transferToCaller(address(optionToken));
         }
-        emit AddLiquidity(getCaller(), optionAddress, liquidity);
+        {
+            // scope for event, avoids stack too deep errors
+            address a0 = optionAddress;
+            uint256 q0 = quantityOptions;
+            uint256 q1 = amountBMax;
+            emit AddLiquidity(getCaller(), a0, q0.add(q1));
+        }
         return (amountA, amountB, liquidity);
     }
 
@@ -332,7 +334,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   tokenA The first token of the Uniswap Pair to add as liquidity.
      * @param   tokenB The second token of the Uniswap Pair to add as liquidity.
      * @param   params The amounts specified to be added as liquidity. Adds exact short options.
-     * @return  Returns the (amountTokenA, amountTokenB, liquidity).
+     * @return  Returns (amountTokenA, amountTokenB, liquidity) amounts.
      */
     function _addLiquidity(
         address tokenA,
@@ -369,6 +371,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   liquidity The quantity of liquidity tokens to pull from `getCaller()` and burn.
      * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
      * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
+     * @return  Returns the sum of the removed underlying tokens.
      */
     function removeShortLiquidityThenCloseOptions(
         address optionAddress,
@@ -412,6 +415,7 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
      * @param   amountAMin The minimum quantity of shortOptionTokens to receive from removing liquidity.
      * @param   amountBMin The minimum quantity of underlyingTokens to receive from removing liquidity.
      * @param   deadline The timestamp to expire a pending transaction and `permit` call.
+     * @return  Returns the sum of the removed underlying tokens.
      */
     function removeShortLiquidityThenCloseOptionsWithPermit(
         address optionAddress,
@@ -422,33 +426,16 @@ contract PrimitiveLiquidity is PrimitiveConnector, IPrimitiveLiquidity, Reentran
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external override onlyRegistered(IOption(optionAddress)) returns (uint256) {
+    ) external override returns (uint256) {
         IOption optionToken = IOption(optionAddress);
-        uint256 liquidity_ = liquidity;
-        uint256 deadline_ = deadline;
-        uint256 amountAMin_ = amountAMin;
-        uint256 amountBMin_ = amountBMin;
-        {
-            uint8 v_ = v;
-            bytes32 r_ = r;
-            bytes32 s_ = s;
-            (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
-            pair.permit(
-                getCaller(),
-                address(_primitiveRouter),
-                liquidity_,
-                deadline_,
-                v_,
-                r_,
-                s_
-            );
-        }
+        (IUniswapV2Pair pair, , ) = getOptionPair(optionToken);
+        pair.permit(getCaller(), address(_primitiveRouter), liquidity, deadline, v, r, s);
         return
             removeShortLiquidityThenCloseOptions(
                 address(optionToken),
-                liquidity_,
-                amountAMin_,
-                amountBMin_
+                liquidity,
+                amountAMin,
+                amountBMin
             );
     }
 

@@ -358,9 +358,8 @@ contract PrimitiveSwaps is
             // Check for users to not pay over their max desired value.
             require(maxPremium >= premium, "PrimitiveSwaps: MAX_PREMIUM");
             // Pull underlyingTokens from the `getCaller()` to pay the remainder of the flash swap.
-            _transferFromCaller(underlying, premium);
             // Push underlying tokens back to the pair as repayment.
-            IERC20(underlying).safeTransfer(address(pair), premium);
+            _transferFromCallerToReceiver(underlying, premium, address(pair));
         }
         // Pay pair in redeem tokens.
         if (redeemPremium > 0) {

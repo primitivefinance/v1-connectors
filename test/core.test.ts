@@ -1,4 +1,3 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/Signer-with-address'
 import chai, { expect } from 'chai'
 import { solidity, MockProvider } from 'ethereum-waffle'
 chai.use(solidity)
@@ -206,7 +205,6 @@ const safeExerciseWithETH = async (wallet: Wallet, inputUnderlyings: BigNumber, 
 }
 
 describe('PrimitiveCore', function () {
-  let signers: SignerWithAddress[]
   let weth: Contract
   let router: Contract, connector: Contract
   let Admin: Wallet, User: Wallet, Bob: string
