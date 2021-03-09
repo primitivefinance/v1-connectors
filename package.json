@@ -26,7 +26,7 @@
     "task:compile": "hardhat compile",
     "compile": "npm-run-all task:clean task:compile",
     "deploy:rinkeby": "cross-env hardhat deploy --network rinkeby",
-    "deploy:mainnet": "cross-env hardhat deploy --network live",
+    "deploy:mainnet": "cross-env hardhat deploy --network live --tags Periphery",
     "verify:rinkeby": "cross-env hardhat run ./scripts/verify.js --network rinkeby",
     "verify:mainnet": "cross-env hardhat run ./scripts/verify.js --network live",
     "deploy-options:rinkeby": "cross-env hardhat run ./scripts/options.ts --network rinkeby",
