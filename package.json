@@ -26,10 +26,13 @@
     "task:compile": "hardhat compile",
     "compile": "npm-run-all task:clean task:compile",
     "deploy:rinkeby": "cross-env hardhat deploy --network rinkeby",
+    "deploy:kovan": "cross-env hardhat deploy --network kovan",
     "deploy:mainnet": "cross-env hardhat deploy --network live --tags Periphery",
     "verify:rinkeby": "cross-env hardhat run ./scripts/verify.js --network rinkeby",
+    "verify:kovan": "cross-env hardhat run ./scripts/verify.js --network kovan",
     "verify:mainnet": "cross-env hardhat run ./scripts/verify.js --network live",
     "deploy-options:rinkeby": "cross-env hardhat run ./scripts/options.ts --network rinkeby",
+    "deploy-options:kovan": "cross-env hardhat run ./scripts/options.ts --network kovan",
     "deploy-options:mainnet": "cross-env hardhat run ./scripts/options.ts --network live"
   },
   "repository": {
@@ -83,7 +86,7 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^3.2.0",
-    "@primitivefi/contracts": "^0.4.2",
+    "@primitivefi/contracts": "0.6.0",
     "@uniswap/v2-core": "^1.0.1",
     "@uniswap/v2-periphery": "^1.1.0-beta.0"
   },

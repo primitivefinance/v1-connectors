@@ -7,7 +7,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   const signer = ethers.provider.getSigner(deployer)
 
   const dai =
-    +chain == 4
+    +chain == 4 || +chain == 42
       ? await deploy('Dai', {
           from: deployer,
           contractName: 'Dai',
