@@ -3,20 +3,24 @@ const { checkInitialization } = require('../test/lib/utils')
 const { ADDRESSES } = require('../test/lib/constants')
 const ROUTER = {
   4: require('../deployments/rinkeby/PrimitiveRouter.json'),
+  42: require('../deployments/kovan/PrimitiveRouter.json'),
 }
 const REGISTRY = {
-  1: require('@primitivefi/contracts/deployments/live_1/Registry.json'),
+  1: require('@primitivefi/contracts/deployments/live/Registry.json'),
   4: require('@primitivefi/contracts/deployments/rinkeby/Registry.json'),
+  42: require('@primitivefi/contracts/deployments/kovan/Registry.json'),
 }
 
 const OPTION_FACTORY = {
-  1: require('@primitivefi/contracts/deployments/live_1/OptionFactory.json'),
+  1: require('@primitivefi/contracts/deployments/live/OptionFactory.json'),
   4: require('@primitivefi/contracts/deployments/rinkeby/OptionFactory.json'),
+  42: require('@primitivefi/contracts/deployments/kovan/OptionFactory.json'),
 }
 
 const REDEEM_FACTORY = {
-  1: require('@primitivefi/contracts/deployments/live_1/RedeemFactory.json'),
+  1: require('@primitivefi/contracts/deployments/live/RedeemFactory.json'),
   4: require('@primitivefi/contracts/deployments/rinkeby/RedeemFactory.json'),
+  42: require('@primitivefi/contracts/deployments/kovan/RedeemFactory.json'),
 }
 const { ZERO_ADDRESS } = ADDRESSES
 const fs = require('fs')
@@ -157,19 +161,26 @@ const ADDRESS_FOR_MARKET = {
   eth: {
     1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
     4: require('@primitivefi/contracts/deployments/rinkeby/WETH9.json').address,
+    42: '0xd0A1E359811322d97991E03f863a0C30C2cF029C',
+  },
+  rai: {
+    42: '0x76b06a2f6dF6f0514e7BEC52a9AfB3f603b477CD',
   },
 }
 
 const STRIKES_FOR_MARKET = {
   eth: ['1000'],
+  rai: [''],
 }
 
 const CALL_STRIKES = {
   eth: ['1600'],
+  rai: ['3.6'],
 }
 
 const PUT_STRIKES = {
   eth: ['800'],
+  rai: ['2.6'],
 }
 
 // 8am utc
@@ -181,12 +192,18 @@ const DECEMBER_30 = '1609286400'
 const JAN_8 = '1610107199'
 const FEB_26 = '1614340799'
 const DEC_2021 = '1638857261'
+const APR_2021 = '1617951600'
 
 const EXPIRIES = {
   eth: [DEC_2021],
+  rai: [APR_2021],
 }
 
-const DAI = { 1: '0x6B175474E89094C44Da98b954EedeAC495271d0F', 4: require('../deployments/rinkeby/Dai.json').address }
+const DAI = {
+  1: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+  4: require('../deployments/rinkeby/Dai.json').address,
+  42: require('../deployments/kovan/Dai.json').address,
+}
 
 const BASE = '1'
 
