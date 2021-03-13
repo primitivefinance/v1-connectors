@@ -10,7 +10,6 @@ const { AddressZero } = ethers.constants
 
 // Helper functions and constants
 import * as utils from './lib/utils'
-import * as setup from './lib/setup'
 import constants from './lib/constants'
 import { connect } from 'http2'
 const { assertWithinError, verifyOptionInvariants, getTokenBalance } = utils

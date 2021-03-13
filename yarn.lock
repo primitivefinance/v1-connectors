@@ -513,15 +513,24 @@
     "@types/sinon-chai" "^3.2.3"
     "@types/web3" "1.0.19"
 
+"@openzeppelin/contracts@3.0.1":
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-3.0.1.tgz#2f327f77d16b43f14674086b2b634bda38cb0838"
+  integrity sha512-uSrD7hZ0ViuHGqHZbeHawZBi/uy7aBiNramXAt2dFFuSuoU4u9insS3V3zdVfOnYSPreUo636xSOuQIFN4//HA==
+
 "@openzeppelin/contracts@^3.2.0":
   version "3.2.0"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-3.2.0.tgz#3e6b3a7662d8ed64271ade96ef42655db983fd9d"
   integrity sha512-bUOmkSoPkjnUyMiKo6RYnb0VHBk5D9KKDAgNLzF41aqAM3TeE0yGdFF5dVRcV60pZdJLlyFT/jjXIZCWyyEzAQ==
 
-"@primitivefi/contracts@^0.4.2":
-  version "0.4.2"
-  resolved "https://registry.yarnpkg.com/@primitivefi/contracts/-/contracts-0.4.2.tgz#e793f165f3041c7dcb354e0467225918e2152371"
-  integrity sha512-ThhvZlCvcnvZyNS8/+aFpwfH2PZD0HxZwyWnnh+I1/+JpY4yRVgNRWhRKo1OJnH4BCaOfIbJw1vkvKHZnpw0Zg==
+"@primitivefi/contracts@0.6.0":
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/@primitivefi/contracts/-/contracts-0.6.0.tgz#436759bc67b66d8887ffd38829923f4de7e382cf"
+  integrity sha512-Kjik84J4Z3xhgSlSeWnjbMc8f9guuNG7DPl94yFDSLPUGsf4FgdqEQmdSy26sPWC0lEpTVssC/0awFo3inXirw==
+  dependencies:
+    "@openzeppelin/contracts" "3.0.1"
+    "@uniswap/v2-core" "^1.0.1"
+    "@uniswap/v2-periphery" "^1.1.0-beta.0"
 
 "@resolver-engine/core@^0.3.3":
   version "0.3.3"

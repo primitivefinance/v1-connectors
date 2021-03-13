@@ -2,7 +2,6 @@ import chai, { assert, expect } from 'chai'
 import { solidity, MockProvider } from 'ethereum-waffle'
 chai.use(solidity)
 import * as utils from './lib/utils'
-import * as setup from './lib/setup'
 import constants from './lib/constants'
 import { parseEther, formatEther } from 'ethers/lib/utils'
 import UniswapV2Pair from '@uniswap/v2-core/build/UniswapV2Pair.json'

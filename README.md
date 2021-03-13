@@ -20,6 +20,8 @@ We use [Hardhat](https://hardhat.org) as a development environment for compiling
 
 ## Testing
 
+Primitive is live on Rinkeby and Kovan testnets.
+
 ### Run Tests
 
 `yarn test`

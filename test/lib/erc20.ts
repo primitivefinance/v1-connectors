@@ -1,7 +1,7 @@
 import { ethers, waffle } from 'hardhat'
 import { Contract, BigNumber, Signer } from 'ethers'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/dist/src/signer-with-address'
-import WethArtifact from '@primitivefi/contracts/artifacts/WETH9.json'
+import WethArtifact from '@primitivefi/contracts/artifacts/contracts/test/tokens/WETH9.sol/WETH9.json'
 import ERC20 from '../../build/contracts/interfaces/IERC20Permit.sol/IERC20Permit.json'
 const { MaxUint256 } = ethers.constants
 const { deployContract } = waffle

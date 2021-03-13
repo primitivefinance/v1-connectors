@@ -1,0 +1,46 @@
+{
+  "eth": {
+    "ETH2021127C001600": {
+      "optionParameters": [
+        "0xd0A1E359811322d97991E03f863a0C30C2cF029C",
+        "0x1B39095e2110C74EB212200aFD9728c20EFfc6bE",
+        "1",
+        "1600",
+        "1638857261"
+      ],
+      "address": "0xc6CF20a1C85a95CdA92bfac7d0FB3703C3447340"
+    },
+    "ETH2021127P000800": {
+      "optionParameters": [
+        "0x1B39095e2110C74EB212200aFD9728c20EFfc6bE",
+        "0xd0A1E359811322d97991E03f863a0C30C2cF029C",
+        "800",
+        "1",
+        "1638857261"
+      ],
+      "address": "0x94Ac517bDf433275efb79B3201bDF48E2Ef25c69"
+    }
+  },
+  "rai": {
+    "RAI202149C0003.6": {
+      "optionParameters": [
+        "0x76b06a2f6dF6f0514e7BEC52a9AfB3f603b477CD",
+        "0x1B39095e2110C74EB212200aFD9728c20EFfc6bE",
+        "1",
+        "3.6",
+        "1617951600"
+      ],
+      "address": "0x014Db0F91ad01DF86869Dc4110b04c8d4fdbDfF7"
+    },
+    "RAI202149P0002.6": {
+      "optionParameters": [
+        "0x1B39095e2110C74EB212200aFD9728c20EFfc6bE",
+        "0x76b06a2f6dF6f0514e7BEC52a9AfB3f603b477CD",
+        "2.6",
+        "1",
+        "1617951600"
+      ],
+      "address": "0xC633A80819B9E7BFeBDBD56CF3094773b85E3016"
+    }
+  }
+}
